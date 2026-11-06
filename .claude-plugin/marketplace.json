@@ -1,0 +1,14 @@
+{
+  "name": "eliotshea",
+  "owner": {
+    "name": "Eliot Shea"
+  },
+  "description": "Eliot Shea's Claude Code skills and agents.",
+  "plugins": [
+    {
+      "name": "eliot",
+      "source": "./",
+      "description": "Eliot Shea's Claude Code skills: deep-module design vocabulary, plan grilling, TDD, an AI-tell scrubber, and the feature-plan / feature-loop workflow with its subagents."
+    }
+  ]
+}

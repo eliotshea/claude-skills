@@ -1,0 +1,34 @@
+{
+  "name": "eliot",
+  "description": "Eliot Shea's Claude Code skills: deep-module design vocabulary, plan grilling, TDD, an AI-tell scrubber, and the feature-plan / feature-loop workflow with its subagents.",
+  "author": {
+    "name": "Eliot Shea"
+  },
+  "repository": "https://github.com/eliotshea/claude-skills",
+  "skills": [
+    "./abomunist",
+    "./codebase-design",
+    "./grill-me",
+    "./grilling",
+    "./loop/feature-loop",
+    "./loop/feature-plan",
+    "./tdd",
+    "./unslop",
+    "./wait-what"
+  ],
+  "agents": [
+    "./loop/agents/architect-reviewer.md",
+    "./loop/agents/brief-writer.md",
+    "./loop/agents/code-reviewer.md",
+    "./loop/agents/code-writer.md",
+    "./loop/agents/plan-drafter.md",
+    "./loop/agents/plan-evaluator.md",
+    "./loop/agents/task-cutter.md",
+    "./loop/agents/task-implementer.md",
+    "./loop/agents/task-readiness-reviewer.md",
+    "./loop/agents/task-scout.md",
+    "./loop/agents/task-validator.md",
+    "./loop/agents/test-writer.md",
+    "./loop/agents/validation-reporter.md"
+  ]
+}
