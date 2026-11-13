@@ -451,7 +451,9 @@ history at the commit the cleanup starts from.
    `git rev-parse --short HEAD`, for the body.
 3. **Condense.** `loop.py cleanup <feature>` removes every run file but each `log.md`, prunes
    the atlas of gone and stale entries, folds every `runs/<NN>/stats.md` total into
-   `runs/stats.md`, and stages it all.
+   `runs/stats.md`, and stages it all. When it prints `no stats total for task <NN>…`, run
+   `run-stats.py <feature> <NN>` for each, add its last line to the table in `runs/stats.md`
+   and stage it. A task it still cannot measure is named in the body as missing from the totals.
 
    It leaves `runs/<NN>/log.md` for every task and `runs/stats.md`, and nothing else under
    `runs/`. The shared atlas keeps only its fresh entries, for the next feature's scouts. The

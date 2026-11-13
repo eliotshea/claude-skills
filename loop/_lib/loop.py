@@ -2,7 +2,7 @@
 """Shell steps for /feature-plan, /feature-loop and their agents, one plain command each.
 
     python3 <plugin root>/loop/_lib/loop.py set-attribution --commit '<lines>' --pr '<lines>'
-    python3 <plugin root>/loop/_lib/loop.py commit '<subject>' [<path>...] [--body '<text>']
+    python3 <plugin root>/loop/_lib/loop.py commit '<subject>' [<path>...] [--body '<text>'] [--allow-empty]
     python3 <plugin root>/loop/_lib/loop.py since '<subject pattern>' [--mine '<subject prefix>']
     python3 <plugin root>/loop/_lib/loop.py plan-gate <feature>
     python3 <plugin root>/loop/_lib/loop.py find-task <feature>
@@ -34,19 +34,21 @@ once per session, and again after switching to a new worktree. Nothing is commit
 commit stages the paths, if any, and commits them alone, or with no paths what is staged,
 with the stored trailer, and
 --body between the subject and the trailer. It fails when nothing is staged, so a commit whose
-edit never landed cannot pass for one that did.
+edit never landed cannot pass for one that did. --allow-empty commits with nothing staged, for a
+recorded run that leaves the tree as it was.
 since prints the commits after the last one whose subject contains the pattern, oldest first,
 leaving out subjects that start with --mine, then `uncommitted:` and `git status --porcelain`.
 plan-gate prints `no branch`, `no plan log`, `plan merged` or `plan not merged`.
 find-task prints `<branch> <NN>` for each unmerged branch that adds a run log of this feature,
-or `none`.
+or `none`. It skips a branch with no history in common with the feature branch.
 start cuts the task branch from HEAD, writes `runs/<NN>/log.md` with row 0 and commits it.
 The skills, agents and scripts come from the plugin, so every agent runs the copy the session
 loaded. When the task branch's copy of the project's own loop files (TOOLING) differs from
 master's, row 0's commit takes master's.
 pr-body writes `runs/<NN>/pr-body.md` from the run files without anyone reading them.
 cleanup removes every run file but each `log.md`, prunes the atlas, folds every `stats.md`
-total into `runs/stats.md`, and stages it all. It commits nothing.
+total into `runs/stats.md`, and stages it all. It commits nothing. It names every task with a
+log but no stats total, so the feature's totals never come out short without saying so.
 section prints the `## ` sections with these exact headings, each under its heading line, or
 without it with --bare. --subheads keeps only their `### ` lines, --preamble adds what comes
 before the first `## `. With several files each starts with a `==> <file> <==` line.
@@ -71,7 +73,8 @@ commit at the base, which the previous task's validation already ran, or `run`.
 run sends a command's output to a log file and prints only the lines matching --grep, the last
 --tail of them, or their --count, then the exit code and the log's path. A run named
 `regression` also prints `- regression: <passed> passed of <total>` from Playwright's summary,
-skipped tests left out, for the evidence to paste verbatim.
+skipped tests left out, for the evidence to paste verbatim, with `; exit <code>` after it when
+the run exited non-zero, which carry never counts as green.
 port prints the first port from <start>, stepping by 2, where nothing answers on it or on the
 one above it, so a validator never waits on a server another checkout left running.
 """
@@ -159,10 +162,10 @@ def cmd_commit(a):
     only = ['--', *a.paths] if a.paths else []
     if a.paths:
         git('add', '--', *a.paths)
-    if run('git', 'diff', '--cached', '--quiet', *only, check=False).returncode == 0:
-        raise Fail('Nothing is staged, so nothing was committed.')
+    if not a.allow_empty and run('git', 'diff', '--cached', '--quiet', *only, check=False).returncode == 0:
+        raise Fail('Nothing is staged, so nothing was committed. Pass --allow-empty to record a run with no change.')
     body = f'{a.body.strip()}\n\n' if a.body else ''
-    git('commit', '-q', '-m', f'{a.subject}\n\n{body}{trailer}', *only)
+    git('commit', '-q', *(['--allow-empty'] if a.allow_empty else []), '-m', f'{a.subject}\n\n{body}{trailer}', *only)
     print(git('log', '-1', '--format=%h %s'))
 
 
@@ -201,6 +204,9 @@ def cmd_find_task(a):
     git('fetch', '-q', 'origin')
     found = []
     for branch in git('branch', '--format=%(refname:short)', '--no-merged', f'origin/{name}').splitlines():
+        # A branch with unrelated history has no merge base, so the three-dot diff below would fail.
+        if run('git', 'merge-base', f'origin/{name}', branch, check=False).returncode:
+            continue
         changed = git('diff', '--name-only', f'origin/{name}...{branch}', '--', runs).splitlines()
         logs = [p for p in changed if p.endswith('/log.md')]
         if not logs:
@@ -328,6 +334,9 @@ def cmd_cleanup(a):
     name, f = feature_name(a.feature), feature_dir(a.feature)
     totals = [read(s).rstrip('\n').splitlines()[-1] for s in sorted(glob.glob(f'{f}/runs/*/stats.md'))
               if read(s).strip()]
+    folded = {t.split('|')[1].strip() for t in totals if t.startswith('|')}
+    missing = sorted(os.path.basename(os.path.dirname(p)) for p in glob.glob(f'{f}/runs/*/log.md')
+                     if os.path.basename(os.path.dirname(p)) not in folded)
     doomed = [p for p in git('ls-files', '--', f'{f}/runs').splitlines() if not p.endswith('/log.md')]
     if doomed:
         git('rm', '-q', '--', *doomed)
@@ -343,6 +352,8 @@ def cmd_cleanup(a):
             '|---|---|---|---|---|---|---|', *totals]) + '\n')
         git('add', '--', f'{f}/runs/stats.md')
     print(f'removed {len(doomed)} run files, folded {len(totals)} stats totals')
+    if missing:
+        print(f'no stats total for task {", ".join(missing)}: fold it in by hand from run-stats.py')
 
 
 # Reading for agents
@@ -430,7 +441,7 @@ def changed(since, *exclude):
 
 
 # A chore task with an inert diff runs only the tests/app specs it touches, and that counts.
-REGRESSION = re.compile(r'^- regression: (?:not run, chore with inert diff; )?(\d+) passed of (\d+)', re.M)
+REGRESSION = re.compile(r'^- regression: (?:not run, chore with inert diff; )?(\d+) passed of (\d+)(?!\d|; exit)', re.M)
 
 
 def green_regression(run_dir):
@@ -545,10 +556,14 @@ def cmd_run(a):
             print(l)
     if a.name == 'regression':
         # Playwright's closing summary: `  116 passed (4.1m)`, `  2 failed`, `  1 flaky`, ...
+        # The line reporter puts cursor codes (ESC[1A ESC[2K) before `1 failed`, so strip every CSI.
         counts = {m.group(2): int(m.group(1)) for l in read(path).splitlines()
-                  if (m := re.match(r'^\s*(\d+) (passed|failed|flaky|interrupted|did not run)\b', l))}
+                  if (m := re.match(r'^\s*(\d+) (passed|failed|flaky|interrupted|did not run)\b',
+                                    re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', l)))}
         if counts:
-            print(f'- regression: {counts.get("passed", 0)} passed of {sum(counts.values())}')
+            # A non-zero exit is never green, whatever the counts say.
+            failed = f'; exit {code}' if code else ''
+            print(f'- regression: {counts.get("passed", 0)} passed of {sum(counts.values())}{failed}')
     print(f'exit {code}, log {path}')
 
 
@@ -578,6 +593,7 @@ def main(argv=None):
     s.add_argument('subject')
     s.add_argument('paths', nargs='*')
     s.add_argument('--body')
+    s.add_argument('--allow-empty', action='store_true')
     s = sub.add_parser('since')
     s.add_argument('pattern')
     s.add_argument('--mine')

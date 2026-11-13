@@ -117,6 +117,13 @@ def test_commit_fails_when_nothing_is_staged(repo):
     assert git(repo, 'rev-parse', 'HEAD') == head
 
 
+def test_commit_allow_empty_records_a_run_with_nothing_staged(repo):
+    attributed(repo)
+    loop(repo, 'commit', 'test: red run', '--allow-empty', '--body', 'red: 1 failed')
+    assert git(repo, 'log', '-1', '--format=%B') == f'test: red run\n\nred: 1 failed\n\n{TRAILER}'
+    assert git(repo, 'show', '--name-only', '--format=', 'HEAD') == ''
+
+
 def test_attribution_is_shared_with_a_new_worktree(repo, tmp_path):
     attributed(repo)
     other = tmp_path / 'other'
@@ -215,6 +222,9 @@ def test_find_task(repo, monkeypatch):
     write(repo, 'u.txt', 'u')
     loop(repo, 'commit', 'feat: unrelated', 'u.txt')
     assert loop(repo, 'find-task', FEATURE).stdout.strip() == f'{FEATURE}-task-03 03'
+    git(repo, 'checkout', '-q', '--orphan', 'no-history')
+    loop(repo, 'commit', 'chore: orphan')
+    assert loop(repo, 'find-task', FEATURE).stdout.strip() == f'{FEATURE}-task-03 03'
     monkeypatch.setenv('FAKE_GH_STATE', 'MERGED')
     assert loop(repo, 'find-task', FEATURE).stdout.strip() == 'none'
 
@@ -285,6 +295,7 @@ def test_cleanup_keeps_logs_and_folds_stats(repo):
     loop(repo, 'commit', 'docs: runs', f)
     out = loop(repo, 'cleanup', f).stdout
     assert 'removed 3 run files, folded 1 stats totals' in out
+    assert 'no stats total for task 02' in out
     staged = git(repo, 'diff', '--cached', '--name-status').splitlines()
     assert sorted(staged) == sorted([f'D\t{f}/runs/01/brief.md', f'D\t{f}/runs/01/stats.md',
                                      f'A\t{f}/runs/stats.md', f'D\t{f}/runs/02/shots/before/x.png'])
@@ -443,6 +454,16 @@ def test_run_regression_prints_the_evidence_line(repo):
     assert '- regression:' not in other
 
 
+def test_run_regression_reads_counts_behind_cursor_codes_and_flags_a_failed_exit(repo):
+    # Playwright's line reporter, as a real log has it: cursor up and clear line before `1 failed`.
+    summary = 'import sys; print("\\x1b[1A\\x1b[2K  1 failed"); print("  136 passed (5.3m)"); sys.exit(1)'
+    lines = loop(repo, 'run', 'regression', '--tail', '1', '--', sys.executable, '-c', summary).stdout.splitlines()
+    assert lines[1] == '- regression: 136 passed of 137; exit 1'
+    green = 'import sys; print("  3 passed (1m)"); sys.exit(1)'
+    lines = loop(repo, 'run', 'regression', '--tail', '1', '--', sys.executable, '-c', green).stdout.splitlines()
+    assert lines[1] == '- regression: 3 passed of 3; exit 1'
+
+
 # round-plan, carry and inert
 
 CODE = f'docs/tasks/{FEATURE}/runs/05'
@@ -473,6 +494,13 @@ def test_carry_with_a_green_regression_at_the_current_code(repo):
 def test_carry_validates_without_a_regression_line(repo):
     attributed(repo)
     evidence(repo, 1, '- regression: 116 of 116 passed')
+    validation(repo, 1)
+    assert loop(repo, 'carry', CODE).stdout.startswith('validate: no green regression run')
+
+
+def test_carry_validates_after_a_regression_run_that_exited_non_zero(repo):
+    attributed(repo)
+    evidence(repo, 1, '- regression: 116 passed of 116; exit 1')
     validation(repo, 1)
     assert loop(repo, 'carry', CODE).stdout.startswith('validate: no green regression run')
 

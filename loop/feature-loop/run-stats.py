@@ -48,7 +48,8 @@ def read_run(path):
             meta = json.load(f)
     except (OSError, ValueError):
         return None
-    agent = meta.get('agentType')
+    # Plugin agents are recorded with their plugin prefix: `eliot:task-scout`.
+    agent = (meta.get('agentType') or '').split(':')[-1]
     if agent not in LOOP_AGENTS:
         return None
 

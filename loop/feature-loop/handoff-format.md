@@ -158,7 +158,9 @@ Repro, and its reporter rules on it like any open finding.
 When a task file asks for a run to be recorded, such as a test going red under a temporary
 break before it is reverted, the agent that ran it writes both runs, command and outcome, in
 the body of the commit that lands the test (`loop.py commit '<subject>' <paths> --body
-'<text>'`). That is where the validator looks: `git log --format=%B <base commit>..HEAD`.
+'<text>'`). That is where the validator looks: `git log --format=%B <base commit>..HEAD`. When the test
+is already committed and the run changes nothing, record it in an empty commit with the same
+command and `--allow-empty`, never a plain `git commit`.
 
 ## Status
 
