@@ -230,18 +230,11 @@ Exactly these lines:
     Addressed: <ids, or "criteria 1-N">
     Declined: <ids, or none>
     Cycles: <n> red, <n> green, <n> direct, <n> style
-    Agents:
-    <cycle> <red|green|direct|style> <agent type> <context>k <tools> <min>, one line per agent you started, in order, or none
     Gates: lint <pass or fail>, or not run, no code changed
     Blocked: <one sentence, or none>
 
-Each `Agents:` line comes from the `<usage>` block that reported that agent finished:
-`subagent_tokens` in thousands, `tool_uses`, and `duration_ms` in whole minutes. A retry is a
-line of its own. The orchestrator gives every line its own row in `log.md`.
-
-An agent's report and its `<usage>` block can arrive separately. Wait for the report, never
-for the usage alone: start the next cycle on the report, and write `? ? ?` for that agent's
-numbers if its usage never reached you before your final message.
+An agent's report and its `<usage>` block can arrive separately. Start the next cycle on the
+report, never wait for the usage.
 
 The `Blocked:` line is never missing. If you cannot finish, it says why, and the lines above
 it say what you did.

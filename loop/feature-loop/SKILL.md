@@ -268,41 +268,35 @@ gets its own row when it returns.
 
 After each agent returns:
 
-1. **Check what it left.**
-   - Scout: `head -3 <run dir>/survey.md` is the three-line survey header.
-   - Brief writer: `grep '^PR title:' <run dir>/brief.md` prints a line.
-   - Implementer: its final message has a `Blocked:` line. If that line is `none`, the message
-     also has a `Commits:` line followed by at least one commit.
-   - Validation runner: `head -3 <run dir>/evidence-<n>.md` is the three-line evidence header.
-   - Reviewers and the validation reporter: `head -6 <its file>` is a valid header, as
-     handoff-format.md defines one.
+1. **Log it.** One call checks the file the agent left, appends its row to `log.md` and
+   commits it:
+
+       python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py row <run dir> '<stage>' <agent> '<result>' --check <its file> --file <its file's name> --usage '<context>k <tools> <min>'
+
+   It prints the file's header, which is all you route on, then the commit. It writes no row
+   when the file is missing or its header is not valid, as handoff-format.md defines one.
+   - An implementer leaves no file, so leave `--check` out and check its final message
+     yourself: it has a `Blocked:` line, and if that is `none`, a `Commits:` line followed by
+     at least one commit.
+   - A row for your own step has `orchestrator` as its agent and no `--check`.
+   - `--with <path>…` commits a file you changed for this step in the same commit.
+   - `--usage` comes from the agent's `<usage>` block when it is already in your context.
+     Otherwise leave it out, and never go back to fill it: `stats.md` reads every agent's
+     numbers from the transcripts.
 2. **If the check fails, first ask whether the agent has finished.** An agent hands back one
    report, and an agent that starts agents of its own can hand back early, with something like
    `(waiting)`, and keep working. Until its completion notification arrives (`status`
    `completed`, with its `<usage>`), it is still running, and a second dispatch would put two
-   agents on one branch. So with no completion notification yet, log nothing and dispatch
-   nothing: end your turn, and the notification wakes you. Then ask it with SendMessage:
+   agents on one branch. So with no completion notification yet, dispatch nothing: end your
+   turn, and the notification wakes you. Then ask it with SendMessage:
    `Your hand-back was missing <what was wrong>. Send your final message as your definition
    gives it.` Its reply is the result to check.
 3. **If the check fails on a finished agent,** or on its reply to that message, dispatch the
    same agent again with the same prompt plus one line: `Previous attempt: <what was wrong>.`
    A retry gets no log row. If the second attempt fails too, escalate.
-4. **Log it.** Append a row to `log.md` with Edit, filling `?` cells of earlier rows whose
-   usage has since arrived, and commit it together with any file you changed for this step:
-
-       python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py commit 'docs(<feature>): loop task <NN> row <#>' <run dir>/log.md
-
-   Fill Context, Tools and Min from the agent's `<usage>` block if it is already in your
-   context, as handoff-format.md says, and write `?` in those cells if it is not. After an
-   implementer, add a sub-row under its row for each line of its `Agents:` block, in the same
-   commit, so every agent's context is in the log.
-
-   **The row is committed before its next step starts.** Wait for `loop.py commit` to print
-   the commit, then dispatch, in a later call. Never put the edit, the commit and the dispatch
-   in one batch of parallel calls: parallel calls do not wait on each other, so a failed edit
-   leaves an empty commit and an agent already running on a step the log does not show.
-
-   **Never end your turn to wait for a `<usage>` block** (handoff-format.md, "log.md").
+4. **The row is committed before its next step starts.** Wait for `row` to print the commit,
+   then dispatch, in a later call: parallel calls do not wait on each other, so a refused row
+   would leave an agent running on a step the log does not show.
 5. **Route on the first row that matches:**
 
 | Result | Next |
@@ -494,7 +488,7 @@ code-writers the implementer starts and retries that got no row, and leaves out 
 human stopped. Each task's `stats.md` is this output for that task alone.
 
 The implementer's own Context stays small because it reads no code: each tdd cycle runs in a
-`test-writer` and a `code-writer` of its own. Its sub-rows give each of them, and the largest
+`test-writer` and a `code-writer` of its own. `stats.md` gives each of them, and the largest
 is the number to watch for code spread over too many files. A single cycle over 50k means
 one behaviour touches more code than one window holds.
 
@@ -534,8 +528,7 @@ task whose scout could not fit the ground it had to cover.
 
 These are all you take in from a task:
 
-- the check in "Routing on a result": one grep, one `head -3` or `head -6`, or the
-  implementer's final message
+- the header `loop.py row` prints, or the implementer's final message
 - finding ids and titles, through `loop.py findings`
 - `log.md`, and `loop.py since` when resuming
 - `00-overview.md` and the task files' status lines, to pick the next task
@@ -554,7 +547,7 @@ header, using Edit on those lines.
 | "Every finding is about the validator's own script; the implementer can decline them" | Route on the `tooling` label: the next runner repairs its scripts. A decline only buys another round to rule on it. |
 | "Architecture round 2 raised a good new point" | Round 2 rules only on round 1's requests. New points are notes for the human. |
 | "I'll chain these few commands in one call" | One plain command per call, or a `loop.py` subcommand. A refused chain is a retry, and a variable or `$(…)` never survives the guard. |
-| "These four calls are independent, I'll batch them" | Not a row's edit, its commit and the dispatch it routes to. The dispatch waits for the commit. |
+| "These calls are independent, I'll batch them" | Not a row and the dispatch it routes to. The dispatch waits for the row's commit. |
 | "The implementer handed back `(waiting)`, I'll dispatch it again" | It is still running until its completion notification. Wait for that, then ask it with SendMessage. |
 | "The human is away, I'll start the next task" | Stop. The next task branches from a feature branch that includes this one. |
 | "The finding contradicts the task file, I'll skip it" | The implementer declines it, quoting the task file. A V or A decline is ruled on by the next round of its stage. An R or U decline goes to the human in the pull request. |

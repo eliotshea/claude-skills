@@ -7,6 +7,7 @@
     python3 <plugin root>/loop/_lib/loop.py plan-gate <feature>
     python3 <plugin root>/loop/_lib/loop.py find-task <feature>
     python3 <plugin root>/loop/_lib/loop.py start <feature> <NN> <task branch>
+    python3 <plugin root>/loop/_lib/loop.py row <run dir> <stage> <agent> '<result>' [--check <file>] [--file <name>] [--usage '<context> <tools> <min>'] [--with <path>...]
     python3 <plugin root>/loop/_lib/loop.py pr-body <feature> <NN>
     python3 <plugin root>/loop/_lib/loop.py cleanup <feature>
     python3 <plugin root>/loop/_lib/loop.py section <file>... -H '<heading>'... [--bare] [--subheads] [--preamble]
@@ -45,6 +46,9 @@ start cuts the task branch from HEAD, writes `runs/<NN>/log.md` with row 0 and c
 The skills, agents and scripts come from the plugin, so every agent runs the copy the session
 loaded. When the task branch's copy of the project's own loop files (TOOLING) differs from
 master's, row 0's commit takes master's.
+row appends the next whole-numbered row to `<run dir>/log.md` and commits it, with any --with
+paths, as `docs(<feature>): loop task <NN> row <#>`. --check first reads that file's header,
+fails without writing a row when it is missing or invalid, and prints it to route on.
 pr-body writes `runs/<NN>/pr-body.md` from the run files without anyone reading them.
 cleanup removes every run file but each `log.md`, prunes the atlas, folds every `stats.md`
 total into `runs/stats.md`, and stages it all. It commits nothing. It names every task with a
@@ -253,6 +257,48 @@ def cmd_start(a):
     git('add', '--', log)
     git('commit', '-q', '-m', f'docs({name}): loop task {a.task} row 0\n\n{trailer}')
     print(git('log', '-1', '--format=%h %s'))
+
+
+REPORTS = {'Validation', 'Architecture', 'Review', 'Feedback'}
+HEADERS = {'Survey': ['Base', 'Anchors'], 'Evidence': ['Commit', 'Items'],
+           'Brief': ['Task file', 'Base', 'Counts', 'PR title'],
+           **{k: ['Commit', 'Verdict', 'Blocking', 'Disputed', 'Repeat'] for k in REPORTS}}
+
+
+def header(path):
+    """The header lines of a handoff file, or Fail saying what is wrong with them."""
+    if not os.path.exists(path):
+        raise Fail(f'{path} does not exist.')
+    lines = read(path).splitlines()
+    kind = lines[0][2:].split(' ')[0].rstrip(':') if lines and lines[0].startswith('# ') else ''
+    keys = HEADERS.get(kind)
+    if not keys:
+        raise Fail(f'{path} does not open with a handoff header.')
+    head = lines[:len(keys) + 1]
+    if [l.split(':')[0] for l in head[1:]] != keys:
+        raise Fail(f'{path} header is not {", ".join(keys)}, in that order.')
+    if kind in REPORTS:
+        verdict, blocking = (l.split(':', 1)[1].strip() for l in head[2:4])
+        if (verdict in ('PASS', 'APPROVED', 'CLEAN')) != (blocking == '0'):
+            raise Fail(f'{path} says {verdict} with Blocking {blocking}.')
+    return head
+
+
+def cmd_row(a):
+    trailer = attribution('commit')
+    head = header(a.check) if a.check else []
+    log = f'{a.run_dir}/log.md'
+    d = os.path.normpath(a.run_dir).split(os.sep)
+    numbers = re.findall(r'^\| (\d+) \|', read(log), re.M)
+    n = int(numbers[-1]) + 1
+    code = git('log', '-1', '--format=%h', '--', '.', ':!docs/tasks', ':!tests/validation')
+    cells = [n, a.stage, a.agent, code, a.result, a.file or '', *(a.usage.split() + ['', '', ''])[:3]]
+    with open(log, 'a') as f:
+        f.write('|' + '|'.join(f' {str(c).replace("|", "/")} ' if c != '' else ' ' for c in cells) + '|\n')
+    paths = [log, *a.paths]
+    git('add', '--', *paths)
+    git('commit', '-q', '-m', f'docs({d[-3]}): loop task {d[-1]} row {n}\n\n{trailer}', '--', *paths)
+    print('\n'.join([*head, git('log', '-1', '--format=%h %s')]))
 
 
 # The pull request and the cleanup
@@ -603,6 +649,13 @@ def main(argv=None):
     s.add_argument('feature')
     s.add_argument('task')
     s.add_argument('branch')
+    s = sub.add_parser('row')
+    for arg in ('run_dir', 'stage', 'agent', 'result'):
+        s.add_argument(arg)
+    s.add_argument('--check')
+    s.add_argument('--file')
+    s.add_argument('--usage', default='')
+    s.add_argument('--with', dest='paths', nargs='*', default=[])
     for c in ('round-plan', 'carry'):
         sub.add_parser(c).add_argument('run_dir')
     sub.add_parser('inert').add_argument('base')

@@ -193,6 +193,30 @@ def test_start_cuts_branch_and_commits_row_0(repo):
     assert log.endswith(f'| 0 | start | orchestrator | {base} | task branch created, loop tooling matches master | log.md | | | |\n')
 
 
+def test_row_checks_the_header_then_appends_and_commits(repo):
+    attributed(repo)
+    run_dir = f'docs/tasks/{FEATURE}/runs/02'
+    loop(repo, 'start', f'docs/tasks/{FEATURE}', '02', f'{FEATURE}-task-02')
+    base = git(repo, 'rev-parse', '--short', 'origin/master')
+    write(repo, f'{run_dir}/validation-1.md',
+          '# Validation 1: task 02\nCommit: x\nVerdict: PASS\nBlocking: 2\nDisputed: 0\nRepeat: none\n')
+    bad = loop(repo, 'row', run_dir, 'validation 1 report', 'validation-reporter', 'PASS',
+               '--check', f'{run_dir}/validation-1.md', check=False)
+    assert bad.returncode == 1 and 'PASS with Blocking 2' in bad.stderr
+    write(repo, f'{run_dir}/validation-1.md',
+          '# Validation 1: task 02\nCommit: x\nVerdict: BLOCKED\nBlocking: 2\nDisputed: 0\nRepeat: none\n')
+    out = loop(repo, 'row', run_dir, 'validation 1 report', 'validation-reporter', 'BLOCKED, 2 blocking',
+               '--check', f'{run_dir}/validation-1.md', '--file', 'validation-1.md', '--usage', '34k 9 2').stdout
+    assert out.startswith('# Validation 1: task 02\nCommit: x\nVerdict: BLOCKED\n')
+    assert out.endswith(f'docs({FEATURE}): loop task 02 row 1\n')
+    log = open(os.path.join(repo, f'{run_dir}/log.md')).read()
+    assert log.endswith(f'| 1 | validation 1 report | validation-reporter | {base} | BLOCKED, 2 blocking | validation-1.md | 34k | 9 | 2 |\n')
+    assert log.count('\n| ') == 3  # the refused row was never written
+    loop(repo, 'row', run_dir, 'escalated', 'orchestrator', 'cap reached')
+    assert open(os.path.join(repo, f'{run_dir}/log.md')).read().endswith('| 2 | escalated | orchestrator | ' + base + ' | cap reached | | | | |\n')
+    assert git(repo, 'status', '--porcelain') == '?? ' + f'{run_dir}/validation-1.md'
+
+
 def test_start_syncs_tooling_that_differs_from_master(repo):
     attributed(repo)
     write(repo, 'tests/validation/README.md', 'gone on master\n')
