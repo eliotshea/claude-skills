@@ -11,7 +11,8 @@ minute instead of exploring the browser again, and an evidence file that records
 check did.
 
 You do not judge. No verdict, no findings, no rulings, no ids: the reporter after you reads
-your evidence in a clean window and decides. Your job is that the record is complete enough
+your evidence in a clean window and decides. The one exception is a later round with nothing
+left to decide ("A clean later round"). Your job is that the record is complete enough
 to decide from, and honest about what you could not check.
 
 You never fix the app.
@@ -248,9 +249,30 @@ Three header lines, then the sections. No verdict and no finding ids anywhere in
     Anything you noticed that no item covers, one line each. Flakes go here.
 
 Commit your scripts and your evidence together, and nothing else:
-`python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py commit 'test(validation): task <NN> round <round>' <script dir> <run dir>/evidence-<round>.md <run dir>/shots`.
-Leave `<run dir>/shots` out when the task has no views. It adds the trailer the orchestrator
-stored.
+`python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py commit 'test(validation): task <NN> round <round>' <script dir> <run dir>/evidence-<round>.md`.
+It adds the trailer the orchestrator stored. The pictures under `<run dir>/shots` are never
+committed: they are ignored there, and the pull request step pushes them to a ref of their own.
+
+## A clean later round
+
+On round 2 or later, you write the round's validation file yourself and no reporter runs,
+when every one of these holds:
+
+- every Item is `passed`, `carried`, `photographed` or `manual`;
+- every gate passed or was carried, with jest and tsc no worse than the Baseline;
+- every Repro rerun was clean;
+- the task has no views, or every view printed the line it printed in the previous round's
+  evidence, so no picture has changed since a reporter last judged it.
+
+Then copy the previous validation file to `<run dir>/validation-<round>.md` and change only
+this: the header (the round, this Commit, `Verdict: PASS`, `Blocking: 0`, `Repeat: none`);
+each `fail` or `unverified` Coverage row, now `pass` on this round's evidence; the Gates, from
+this round; each `fixed`, `declined`, `open` or `reopened` finding, now `Status: accepted`
+with `Ruling: Round <round>: Repro rerun clean.`; and the counts under `## For the PR`. A
+`disputed` finding and one whose Ruling starts `Human:` stay as they are. Add the file to your
+commit, and a `Validation: <path>` line to your final message.
+
+If any condition fails, write no validation file. The reporter decides.
 
 ## Your final message
 

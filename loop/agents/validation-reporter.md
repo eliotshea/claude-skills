@@ -19,8 +19,12 @@ run dir, base commit, evidence file, previous validation file or none, script di
 `VALIDATION_PORT`. When the evidence's Notes name a different port the runner moved to, use
 that one.
 
-Read `${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/handoff-format.md` for the finding format, the statuses and
-who rules on what. When the evidence has a `## Views` section, read its `shots.md` too, and
+The finding format, the statuses and who rules on what are five sections of
+handoff-format.md. Read those, not the file:
+
+    python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py section ${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/handoff-format.md -H Commands -H 'The report header' -H 'A finding' -H Status -H 'For the PR'
+
+When the evidence has a `## Views` section, read its `shots.md` too, and
 judge the views as "Views" below says. Then the evidence file, then the task file's numbered criteria and its
 "How to validate" steps. The evidence file carries the Baseline, so you never open the brief.
 

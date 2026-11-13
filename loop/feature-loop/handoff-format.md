@@ -41,7 +41,7 @@ too.
 | `docs/tasks/atlas.md`, outside the run dir | task-scout, through `atlas.py merge`, in the survey's commit; pruned through `atlas.py prune` by the implementer and the cleanup | one, shared by every feature |
 | `brief.md` | brief-writer, from `survey.md` | |
 | `evidence-<n>.md` | task-validator, in the same commit as its scripts | n is its validation's number |
-| `validation-<n>.md` | validation-reporter, from `evidence-<n>.md` | n counts validations across the whole task: 1, 2, 3, … whichever stage each belongs to |
+| `validation-<n>.md` | validation-reporter, from `evidence-<n>.md`; the runner itself on a later round where nothing failed and no picture changed | n counts validations across the whole task: 1, 2, 3, … whichever stage each belongs to |
 | `architecture-<n>.md` | architect-reviewer | n is the architecture round |
 | `review-1.md` | code-reviewer | code review runs once |
 | `feedback-<k>.md` | orchestrator, from the human's pull request feedback | k counts feedback rounds |
@@ -49,7 +49,8 @@ too.
 | `stats.md` | orchestrator, from `run-stats.py`, with the pull request or a `stopped` row | |
 
 When every task is merged, the orchestrator's cleanup pull request removes all of these but
-each task's `log.md`, and folds each `stats.md`'s last line into one `runs/stats.md`. So
+each task's `log.md`, and folds each `stats.md`'s last line into one `runs/stats.md` and each
+fixed finding into one line of `runs/findings.md`. So
 nothing a later task needs may live only in a run directory.
 
 The implementer writes no file of its own. It edits the `Status:` and `Fix:` lines of the
@@ -155,6 +156,8 @@ Repro, and its reporter rules on it like any open finding.
 
 ## Recorded runs
 
+Every green cycle's commit body carries its red, `Red: <command>: <failing line>`, asked for
+or not, so a task that wants proof a test failed first never costs a fix round.
 When a task file asks for a run to be recorded, such as a test going red under a temporary
 break before it is reverted, the agent that ran it writes both runs, command and outcome, in
 the body of the commit that lands the test (`loop.py commit '<subject>' <paths> --body
@@ -185,7 +188,7 @@ Who rules, by prefix:
   disputed.
 - **`A`**: the next architecture round. A fix is `accepted` or `reopened`. A decline is
   `accepted` or `disputed`. A finding the refactor left unaddressed is `reopened`.
-- **`R` and `U`**: nobody. `fixed` stands, since the final validation after it reruns the
+- **`R` and `U`**: nobody. `fixed` stands, since the validation after it reruns the
   whole contract without ruling on these ids. `declined` goes to the human in the pull request.
 
 ## For the PR
@@ -207,43 +210,25 @@ request body with a shell script, without reading them, so each must stand on it
     | 1 | survey | task-scout | 57a85c5 | 1 wrong of 14 anchors, 6 observations, 22 KB, atlas 9 fresh 2 stale 3 new | survey.md | 62k | 19 | 4 |
     | 2 | brief | brief-writer | 57a85c5 | 1 wrong anchor, 3 traps, 2 extra reads | brief.md | 37k | 12 | 2 |
     | 3 | build | task-implementer | 9c1e2f0 | 3 commits, 3 red, 3 green, 0 direct | | 31k | 24 | 14 |
-    | 3.1 | build › cycle 1 red | └ test-writer | | | | 22k | 8 | 1 |
-    | 3.2 | build › cycle 1 green | └ code-writer | | | | 38k | 14 | 3 |
-    | 3.3 | build › cycle 2 red | └ test-writer | | | | 19k | 6 | 1 |
-    | 3.4 | build › cycle 2 green | └ code-writer | | | | 27k | 11 | 2 |
-    | 3.5 | build › cycle 3 red | └ test-writer | | | | 20k | 7 | 1 |
-    | 3.6 | build › cycle 3 green | └ code-writer | | | | 24k | 9 | 2 |
     | 4 | validation 1 run | task-validator | 9c1e2f0 | 19 passed, 2 failed, 1 manual | evidence-1.md | 96k | 68 | 11 |
     | 5 | validation 1 report | validation-reporter | 9c1e2f0 | BLOCKED, 2 blocking | validation-1.md | 34k | 9 | 2 |
     | 6 | fix | task-implementer | a41d7b2 | 2 fixed, 0 declined | | 49k | 20 | 3 |
 
-Result is taken from the agent's final message or the file's header. An implementer row's
-Result is its commit count and its `Cycles:` line. Every agent it started gets a sub-row
-directly under it, one per line of its `Agents:` block, in order: `#` is the parent's number
-and a counter (`3.1`, `3.2`), Stage is the parent's stage and `› cycle <n> <red|green|direct|style>`,
-Agent is the type after `└ `, and Code commit, Result and File are empty. The parent row and
-its sub-rows are one commit. A sub-row never routes: "the last row" always means the last row
-whose `#` is a whole number. A validation's two agents
-get a row each, staged `validation <n> run` and `validation <n> report`, and so do the brief's,
-staged `survey` and `brief`. A row rebuilt from a commit on resume has no final message to
-read: take its Result from the count in the file's header and add `, from resume`, so the
-runner's reads `22 items, from resume`, the scout's `1 wrong of 14 anchors, from resume` and
-the writer's comes from the brief's `Counts:` line. Context, Tools and Min
-come from the `<usage>` block that reports the agent finished: `subagent_tokens` in thousands,
-`tool_uses`, and `duration_ms` in whole minutes. Context is how full the agent's window was
-when it stopped. Min is wall clock and includes stalls. `run-stats.py` separates them. A
-usage block that has not arrived when the row is written leaves `?` in all three cells, filled
-in a later row's commit if it turns up. **Never end your turn to wait for a `<usage>`
-block.** An agent's report and the notification carrying its usage arrive as two messages,
-sometimes minutes apart, and the usage changes nothing about where the run goes next. Log with
-`?`, route, dispatch. `stats.md` reads every agent's numbers from the transcripts at the pull
-request, so a `?` loses nothing. A retry
-that gets no row of its own adds its numbers to the row, as `+`, e.g. `61k+88k`. An
-implementer row rebuilt on resume has no `Agents:` block and so no sub-rows; `stats.md`
-still counts those agents. A row the orchestrator
-writes for its own step has `orchestrator` as its agent and one of these stages: `feedback`,
-`ruling`, `grant`, `escalated`, `stopped`, `validation carried`, `pull request`, `pull request updated`. Its Context,
-Tools and Min are empty.
+The orchestrator writes every row with `loop.py row`, which numbers it, fills Code commit and
+commits it. Result is taken from the agent's final message or the file's header. An
+implementer row's Result is its commit count and its `Cycles:` line; the agents it started
+get no rows, because `stats.md` counts them from the transcripts. A validation's two agents
+get a row each, staged `validation <n> run` and `validation <n> report`, and so do the
+brief's, staged `survey` and `brief`. A row rebuilt from a commit on resume has no final
+message to read: take its Result from the count in the file's header and add `, from resume`.
+Context, Tools and Min come from the `<usage>` block that reports the agent finished:
+`subagent_tokens` in thousands, `tool_uses`, and `duration_ms` in whole minutes. They stay
+empty when that block has not arrived. **Never end your turn to wait for a `<usage>` block,**
+and never go back to fill one in: it changes nothing about where the run goes next, and
+`stats.md` reads every agent's numbers from the transcripts at the pull request. A row the
+orchestrator writes for its own step has `orchestrator` as its agent and one of these stages:
+`feedback`, `ruling`, `grant`, `escalated`, `stopped`, `validation carried`, `pull request`,
+`pull request updated`.
 
 Row 0 is the file's creation, before any agent runs. Each row is its own commit,
 `docs(<feature>): loop task <NN> row <#>`. It carries any file the orchestrator changed for that step. The orchestrator's

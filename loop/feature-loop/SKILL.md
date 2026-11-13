@@ -43,7 +43,7 @@ handoff-format.md's "Commands" gives, and never `$` followed by a digit in this 
    .claude/worktrees/<feature-branch> <feature-branch>`. If that fails because the branch is
    checked out somewhere else, ask the human. Switch in with EnterWorktree and its `path`.
    Every agent runs in this worktree, one at a time, but for the design and code reviews,
-   which change no code and run together.
+   which change no code and run beside the build's validation.
 3. **Runnable and clean.** Copy `.env` from the main checkout root if the worktree lacks it;
    it is gitignored and the build fails without it. Run `pnpm install` if `node_modules` is
    missing. `git fetch origin`. If `git status --porcelain` shows changes while a task branch
@@ -131,9 +131,9 @@ progress, not a cut-off step. Wait for its notification before anything below.
 - **Commits or uncommitted changes from an agent:** the step the last row routed to was cut
   off. `git status --porcelain` says which agent it was, because each one writes its own
   paths: `survey.md` is the scout, `brief.md` is the brief writer, the script dir or
-  `evidence-<n>.md` or `shots/` is the runner, `validation-<n>.md` is the reporter, `architecture-<n>.md`
+  `evidence-<n>.md` is the runner, `validation-<n>.md` is the reporter, `architecture-<n>.md`
   is the architect, `review-1.md` is the code reviewer, and code outside the run dir is the
-  implementer. Architecture round 1 and the code review run together, so both can be cut off.
+  implementer. The build's validation and the reviews run together, so several can be cut off.
   Dispatch each cut-off agent again with its prompt plus
   `Previous attempt: interrupted. Its commits since the last log row and any uncommitted
   changes are in the tree. Finish the job.`
@@ -143,54 +143,53 @@ progress, not a cut-off step. Wait for its notification before anything below.
 ```dot
 digraph feature_loop {
   node [shape=box];
-  survey; brief; build; validate; report; fix; "design and code review"; "review fix";
+  survey; brief; build; "validate, design and code review"; fix; validate;
   "architect round 2+"; refactor;
   "human feedback" [shape=ellipse];
-  "PASS?" [shape=diamond];
+  "all clean?" [shape=diamond]; "PASS?" [shape=diamond];
   "open or update PR, stop" [shape=doublecircle];
 
-  survey -> brief -> build -> validate -> report -> "PASS?";
+  survey -> brief -> build -> "validate, design and code review" -> "all clean?";
+  "all clean?" -> "open or update PR, stop" [label="PASS, CLEAN, APPROVED"];
+  "all clean?" -> fix [label="any open finding"];
+  "all clean?" -> validate [label="tooling findings only"];
+  fix -> validate -> "PASS?";
   "PASS?" -> fix [label="BLOCKED"];
   "PASS?" -> validate [label="BLOCKED, tooling only"];
-  fix -> validate;
-  "PASS?" -> "design and code review" [label="PASS, not final"];
-  "PASS?" -> "architect round 2+" [label="PASS, final, design changes requested"];
-  "PASS?" -> "open or update PR, stop" [label="PASS, final"];
-  "design and code review" -> "review fix" [label="FINDINGS or CHANGES REQUESTED"];
-  "design and code review" -> validate [label="CLEAN and APPROVED, code changed since the last PASS"];
-  "design and code review" -> "open or update PR, stop" [label="CLEAN and APPROVED, carry"];
-  "review fix" -> validate;
+  "PASS?" -> "architect round 2+" [label="PASS, design changes were requested"];
+  "PASS?" -> "open or update PR, stop" [label="PASS"];
   "architect round 2+" -> "open or update PR, stop" [label="APPROVED"];
   "architect round 2+" -> refactor [label="CHANGES REQUESTED, granted"];
   refactor -> validate;
   "open or update PR, stop" -> "human feedback" [style=dashed];
-  "human feedback" -> "review fix";
+  "human feedback" -> fix;
 }
 ```
 
-After the build's validation passes, the design review (architect round 1) and the code
-review run at once, on the same commit, and one review fix answers both files. A style-only
-or chore-only task gets the code review alone. Architect round 2 and later run only after a
-final validation passes while the design review still has changes requested, and rule only
-on round 1's requests.
+The build is checked three ways at once, on the same commit: validation round 1, the design
+review (architect round 1) and the code review. A style-only or chore-only task gets no
+design review. One fix answers every open finding in the three files, and the validation
+after it is what the pull request claims. So the fix for a blocked round 1 is not itself
+reviewed, as a review fix never was. Architect round 2 and later run only after a validation
+passes while the design review still has changes requested, and rule only on round 1's
+requests.
 
 A **stage** is one piece of implementation work and the validation rounds that follow it.
-There are four kinds: the build, a review fix, a refactor and a feedback fix. Reviews with
-nothing to fix also start a stage, one that begins at its validation. Each stage allows 3 fix
+There are three kinds: the build, a refactor and a feedback fix. Each stage allows 3 fix
 rounds, counted from the stage's start or from the latest `grant` row for that stage.
 
-A validation is **final** when its stage began at the reviews or later. Only a final
-validation that passes opens or updates the pull request.
+Every validation runs the whole contract, so any that passes can open or update the pull
+request, and `Final:` is always `yes`.
 
-**A passing round carries.** Before every final validation, run
+**A passing round carries.** Before every validation but the build's first, run
 
     python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py carry <run dir>
 
 `carry <n>` means validation n passed at the code that is there now, and a round at that same
-code ran the regression suite green: a final round would check the same commit again and
+code ran the regression suite green: another round would check the same commit again and
 find what n found. Log a `validation carried` row (Result `validation <n> carried`), and route
-as on a final PASS. `validate: <why>` means run it. A review fix, a feedback fix or a refactor
-that committed code always gets `validate`.
+as on a PASS. `validate: <why>` means run it. A fix or a refactor gets
+`validate` unless all it changed was whole `//` comment lines.
 
 **Tooling findings.** A finding labelled `tooling` (`### V3-1 · tooling`) is about the
 validator's own scripts or the loop's tools, such as a mask that moves or a base worktree
@@ -243,11 +242,10 @@ then the agent-specific ones below. Each agent's own definition says what to do 
 | brief | `eliot:brief-writer` | `Base branch: <feature-branch>`, `Survey file: <run dir>/survey.md` |
 | brief, chore only | `eliot:brief-writer` | `Base branch: <feature-branch>`, `Mode: chore` |
 | build | `eliot:task-implementer` | `Mode: build` |
-| fix | `eliot:task-implementer` | `Mode: fix`, `Findings: <run dir>/validation-<n>.md: <ids>` |
 | refactor | `eliot:task-implementer` | `Mode: refactor`, `Findings: <run dir>/architecture-<n>.md: <ids>` |
-| review fix | `eliot:task-implementer` | `Mode: review-fix`, then one `Findings: <file>: <ids>` line for each of `<run dir>/review-1.md` and `<run dir>/architecture-1.md` that has open ids, or for `<run dir>/feedback-<k>.md` |
-| validate | `eliot:task-validator` | `Round: <latest validation + 1>`, `Final: <yes or no>`, `Kind: <full, style only or chore only>`, `Script dir: tests/validation/<feature>`, `Previous validation: <run dir>/validation-<latest>.md or none`, `VALIDATION_PORT: <port>` |
-| report | `eliot:validation-reporter` | `Round: <the round the runner just ran>`, `Final: <yes or no>`, `Kind: <as the runner's>`, `Evidence file: <run dir>/evidence-<n>.md`, `Previous validation: <run dir>/validation-<n-1>.md or none`, `Script dir: tests/validation/<feature>`, `VALIDATION_PORT: <port>` |
+| fix | `eliot:task-implementer` | `Mode: fix` when every id is a validation finding, otherwise `Mode: review-fix`. Then one `Findings: <file>: <ids>` line for each of the latest validation file, `<run dir>/review-1.md` and `<run dir>/architecture-1.md` that has open ids, or for `<run dir>/feedback-<k>.md` |
+| validate | `eliot:task-validator` | `Round: <latest validation + 1>`, `Final: yes`, `Kind: <full, style only or chore only>`, `Script dir: tests/validation/<feature>`, `Previous validation: <run dir>/validation-<latest>.md or none`, `VALIDATION_PORT: <port>` |
+| report | `eliot:validation-reporter` | `Round: <the round the runner just ran>`, `Final: yes`, `Kind: <as the runner's>`, `Evidence file: <run dir>/evidence-<n>.md`, `Previous validation: <run dir>/validation-<n-1>.md or none`, `Script dir: tests/validation/<feature>`, `VALIDATION_PORT: <port>` |
 | architect | `eliot:architect-reviewer` | `Round: <n>`, `Previous architecture: <run dir>/architecture-<n-1>.md or none` |
 | code review | `eliot:code-reviewer` | `Round: 1` |
 
@@ -261,48 +259,43 @@ Validation rounds are numbered across the whole task, and `Previous validation` 
 latest one, whatever stage it came from. A validation is two dispatches: the runner, then the
 reporter on the evidence it wrote. They share the round's number.
 
-The design and code reviews are two dispatches in one message, so they run at once. Each
-gets its own row when it returns.
+After the build, the validation runner and the reviews are dispatched in one message, so
+they run at once. Each gets its own row when it returns, and the reporter is dispatched as
+soon as the runner's row is in.
 
 ## Routing on a result
 
 After each agent returns:
 
-1. **Check what it left.**
-   - Scout: `head -3 <run dir>/survey.md` is the three-line survey header.
-   - Brief writer: `grep '^PR title:' <run dir>/brief.md` prints a line.
-   - Implementer: its final message has a `Blocked:` line. If that line is `none`, the message
-     also has a `Commits:` line followed by at least one commit.
-   - Validation runner: `head -3 <run dir>/evidence-<n>.md` is the three-line evidence header.
-   - Reviewers and the validation reporter: `head -6 <its file>` is a valid header, as
-     handoff-format.md defines one.
+1. **Log it.** One call checks the file the agent left, appends its row to `log.md` and
+   commits it:
+
+       python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py row <run dir> '<stage>' <agent> '<result>' --check <its file> --file <its file's name> --usage '<context>k <tools> <min>'
+
+   It prints the file's header, which is all you route on, then the commit. It writes no row
+   when the file is missing or its header is not valid, as handoff-format.md defines one.
+   - An implementer leaves no file, so leave `--check` out and check its final message
+     yourself: it has a `Blocked:` line, and if that is `none`, a `Commits:` line followed by
+     at least one commit.
+   - A row for your own step has `orchestrator` as its agent and no `--check`.
+   - `--with <path>…` commits a file you changed for this step in the same commit.
+   - `--usage` comes from the agent's `<usage>` block when it is already in your context.
+     Otherwise leave it out, and never go back to fill it: `stats.md` reads every agent's
+     numbers from the transcripts.
 2. **If the check fails, first ask whether the agent has finished.** An agent hands back one
    report, and an agent that starts agents of its own can hand back early, with something like
    `(waiting)`, and keep working. Until its completion notification arrives (`status`
    `completed`, with its `<usage>`), it is still running, and a second dispatch would put two
-   agents on one branch. So with no completion notification yet, log nothing and dispatch
-   nothing: end your turn, and the notification wakes you. Then ask it with SendMessage:
+   agents on one branch. So with no completion notification yet, dispatch nothing: end your
+   turn, and the notification wakes you. Then ask it with SendMessage:
    `Your hand-back was missing <what was wrong>. Send your final message as your definition
    gives it.` Its reply is the result to check.
 3. **If the check fails on a finished agent,** or on its reply to that message, dispatch the
    same agent again with the same prompt plus one line: `Previous attempt: <what was wrong>.`
    A retry gets no log row. If the second attempt fails too, escalate.
-4. **Log it.** Append a row to `log.md` with Edit, filling `?` cells of earlier rows whose
-   usage has since arrived, and commit it together with any file you changed for this step:
-
-       python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py commit 'docs(<feature>): loop task <NN> row <#>' <run dir>/log.md
-
-   Fill Context, Tools and Min from the agent's `<usage>` block if it is already in your
-   context, as handoff-format.md says, and write `?` in those cells if it is not. After an
-   implementer, add a sub-row under its row for each line of its `Agents:` block, in the same
-   commit, so every agent's context is in the log.
-
-   **The row is committed before its next step starts.** Wait for `loop.py commit` to print
-   the commit, then dispatch, in a later call. Never put the edit, the commit and the dispatch
-   in one batch of parallel calls: parallel calls do not wait on each other, so a failed edit
-   leaves an empty commit and an agent already running on a step the log does not show.
-
-   **Never end your turn to wait for a `<usage>` block** (handoff-format.md, "log.md").
+4. **The row is committed before its next step starts.** Wait for `row` to print the commit,
+   then dispatch, in a later call: parallel calls do not wait on each other, so a refused row
+   would leave an agent running on a step the log does not show.
 5. **Route on the first row that matches:**
 
 | Result | Next |
@@ -312,24 +305,21 @@ After each agent returns:
 | Scout wrote the survey | brief |
 | Brief writer wrote the brief | build |
 | Implementer's `Blocked:` is not `none` | Escalate. |
-| Implementer returned, Final yes for its stage | `loop.py carry`: carried, or validate, final |
-| Implementer returned | validate, with Final from the stage it is in |
+| The build's implementer returned | validate, architecture round 1 and code review, at once. Style only or chore only: validate and code review |
+| Any other implementer returned | `loop.py carry`: carried, or validate |
+| Runner wrote the evidence, and its message has a `Validation:` line | Log a `validation <n> report` row for `task-validator` with `--check` on that file, and route on its header. No reporter |
 | Runner wrote the evidence | report, same round |
+| Validation round 1's report, architecture round 1 or the review returned, and another of those three that was dispatched has no row yet | Wait for it while it runs. After a resume, dispatch it. |
 | Validation `Repeat:` names an id that no `grant` row for this stage names | Escalate. A fix did not hold. |
 | Validation BLOCKED, and this stage has had 3 fix rounds | Escalate. |
-| Validation BLOCKED, and `loop.py findings <file> --label tooling --count` equals Blocking | validate, same Final, no fix |
-| Validation BLOCKED | fix |
-| Validation PASS, final, or `validation carried`, and the latest architecture file is CHANGES REQUESTED | architecture, with round = the latest architecture round + 1 |
-| Validation PASS, final, or `validation carried`, and `log.md` has a `pull request` row | update the pull request |
-| Validation PASS, final, or `validation carried` | open the pull request |
-| Validation PASS, style only or chore only | code review |
-| Validation PASS | architecture round 1 and code review, at once |
-| Architecture round 1 or review returned, neither style only nor chore only, and the other has no row yet | Wait for the other while it runs. After a resume, dispatch it. |
-| Review CLEAN, and architecture round 1 APPROVED or skipped | `loop.py carry`: carried, or validate, final |
-| Review or architecture round 1 returned | review fix, with the open ids of both files |
-| Architecture APPROVED | as on a final PASS: update or open the pull request |
-| Architecture CHANGES REQUESTED, and a `grant: architecture round <this round>` row exists | refactor |
-| Architecture CHANGES REQUESTED | Escalate. |
+| Validation BLOCKED, `loop.py findings <file> --label tooling --count` equals Blocking, and neither `review-1.md` nor `architecture-1.md` has open ids | validate, no fix |
+| Validation BLOCKED, or `review-1.md` or `architecture-1.md` has open ids | fix, with the open ids of every one of the three files |
+| Validation PASS or `validation carried`, and the latest architecture file is CHANGES REQUESTED | architecture, with round = the latest architecture round + 1 |
+| Validation PASS or `validation carried`, and `log.md` has a `pull request` row | update the pull request |
+| Validation PASS or `validation carried` | open the pull request |
+| Architecture round 2 or later APPROVED | as on a PASS: update or open the pull request |
+| Architecture round 2 or later CHANGES REQUESTED, and a `grant: architecture round <this round>` row exists | refactor |
+| Architecture round 2 or later CHANGES REQUESTED | Escalate. |
 
 ## Escalating
 
@@ -347,7 +337,7 @@ failed twice leaves a good survey and no brief.
 Applying the answer:
 
 - **Another round.** Log a `grant` row. Its Result is `grant: <stage>, <ids>` after a cap or a
-  Repeat, naming the stage (e.g. `build`, `refactor 1`, `review fix`) and the ids that were
+  Repeat, naming the stage (e.g. `build`, `refactor 1`, `feedback fix 1`) and the ids that were
   blocking or repeated. After an architecture refusal it is `grant: architecture round <n>`.
   Then route again on the same result. A stage grant resets that stage's fix count and stops
   its named Repeat ids escalating again within the stage. An architecture grant lets that
@@ -368,8 +358,9 @@ Applying the answer:
 ## The pull request
 
 1. **Body.** Build `runs/<NN>/pr-body.md`. It stitches each run file's `## For the PR` section
-   together without you reading them, from the latest validation and architecture files, and
-   ends with the pull request lines you stored:
+   together without you reading them, from the latest validation and architecture files,
+   pushes the task's pictures to `refs/loop-shots/<feature>`, a ref no clone fetches and no
+   branch merges, and ends with the pull request lines you stored:
 
        python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py pr-body <feature> <NN>
 
@@ -432,9 +423,8 @@ current last code commit. Get the URL with `gh pr view <number> --json url -q .u
 
 Once every task is complete and merged, the run files have done their job. One last pull
 request into the feature branch removes them, so the feature does not reach `master` carrying
-hundreds of handoff files. It keeps each task's `log.md`, the record the tasks' sizes are
-compared from, and folds each `stats.md` total into one table. Everything else stays in git
-history at the commit the cleanup starts from.
+hundreds of handoff files. Everything it removes stays in git history at the commit the
+cleanup starts from.
 
 1. **Once only.** Look for a cleanup pull request already made:
 
@@ -449,23 +439,25 @@ history at the commit the cleanup starts from.
 
    `-B` rebuilds the branch if a cut-off cleanup left one behind. Note the starting commit,
    `git rev-parse --short HEAD`, for the body.
-3. **Condense.** `loop.py cleanup <feature>` removes every run file but each `log.md`, prunes
-   the atlas of gone and stale entries, folds every `runs/<NN>/stats.md` total into
-   `runs/stats.md`, and stages it all. When it prints `no stats total for task <NN>…`, run
-   `run-stats.py <feature> <NN>` for each, add its last line to the table in `runs/stats.md`
-   and stage it. A task it still cannot measure is named in the body as missing from the totals.
+3. **Condense.** `loop.py cleanup <feature>` removes every run file but each `log.md`, the
+   task files, and the plan's drafts, evaluation, `PLAN.md`, readiness and grill files. It prunes the atlas of gone
+   and stale entries, folds every `runs/<NN>/stats.md` total into `runs/stats.md` and every
+   finding that led to a fix into `runs/findings.md`, and stages it all. When it prints
+   `no stats total for task <NN>…`, run `run-stats.py <feature> <NN>` for each, add its last
+   line to the table in `runs/stats.md` and stage it. A task it still cannot measure is named
+   in the body as missing from the totals.
 
-   It leaves `runs/<NN>/log.md` for every task and `runs/stats.md`, and nothing else under
-   `runs/`. The shared atlas keeps only its fresh entries, for the next feature's scouts. The
-   task files, `00-overview.md`, `PROGRESS.md`, the plan's files and the validation scripts in
-   `tests/validation/<feature>/` stay.
+   What stays is what a later feature or a tuning pass reads: each `log.md`, `runs/stats.md`,
+   `runs/findings.md`, `plan-log.md`, `DECISIONS.md`, `00-overview.md` (the next feature's
+   cutter takes its rules from it), `PROGRESS.md`, the atlas's fresh entries and the validation scripts in
+   `tests/validation/<feature>/`.
 4. **Commit and push.** `loop.py commit 'docs(<feature>): clean up loop run files'` commits
    what the cleanup staged. `git push --force-with-lease -u origin <feature-branch>-cleanup`.
 5. **Open.** Write the body to a file outside the repository, `mktemp`, since the run
    directories are gone: one line saying this removes the loop's run files for `<feature>`;
    the counts of files removed and kept, from `git diff --shortstat HEAD^ HEAD`; that each
-   task's `log.md` stays for comparing task sizes and `runs/stats.md` holds every task's
-   total; that every removed file is still at `<starting commit>`, as
+   task's `log.md` stays, `runs/stats.md` holds every task's total and `runs/findings.md` every
+   finding that was fixed; that every removed file is still at `<starting commit>`, as
    `git show <starting commit>:docs/tasks/<feature>/runs/<NN>/<file>`; and the pull request
    attribution lines. Then
 
@@ -493,8 +485,8 @@ context of all its runs added up, and the minutes. It includes the test-writers 
 code-writers the implementer starts and retries that got no row, and leaves out runs the
 human stopped. Each task's `stats.md` is this output for that task alone.
 
-The implementer's own Context stays small because it reads no code: each tdd cycle runs in a
-`test-writer` and a `code-writer` of its own. Its sub-rows give each of them, and the largest
+The implementer's own Context stays small because it reads no code: each tdd cycle runs in
+agents of its own. `stats.md` gives each of them, and the largest
 is the number to watch for code spread over too many files. A single cycle over 50k means
 one behaviour touches more code than one window holds.
 
@@ -523,8 +515,8 @@ task whose scout could not fit the ground it had to cover.
     `none given`. Fix and Ruling are empty.
   - `## For the PR` is one line saying how many points this round raised.
 
-  Log a `feedback` row, committing the file with it, and start a feedback fix: a review fix with this file, then
-  final validation.
+  Log a `feedback` row, committing the file with it, and start a feedback fix: a fix with this
+  file, then validation.
 - **A ruling on disputed or declined findings in the pull request.** Record it as in "A ruling
   on a finding" under Escalating, without routing on the header. If the ruling asks for a
   change, write that change up as feedback. Otherwise update the pull request.
@@ -534,8 +526,7 @@ task whose scout could not fit the ground it had to cover.
 
 These are all you take in from a task:
 
-- the check in "Routing on a result": one grep, one `head -3` or `head -6`, or the
-  implementer's final message
+- the header `loop.py row` prints, or the implementer's final message
 - finding ids and titles, through `loop.py findings`
 - `log.md`, and `loop.py since` when resuming
 - `00-overview.md` and the task files' status lines, to pick the next task
@@ -549,12 +540,12 @@ header, using Edit on those lines.
 | "The evidence file says it failed, that's a finding" | The reporter decides that. The runner's evidence is what happened, not what it means. |
 | "It's a one-line fix, I'll make it myself" | Dispatch a fix. Your edit skips the test, and the next validator would judge a commit no agent accounted for. |
 | "I'll read the validation file to understand the failure" | The implementer reads it. You route on the header. |
-| "The review fix was tiny, and the last validation passed" | Run `loop.py carry`. A fix that committed code gets a final validation: the pull request claims what that validation saw. |
-| "Nothing changed since the last PASS, but the table says validate, final" | Run `loop.py carry`. It carries that PASS when the code and a green regression run are the same. |
+| "The fix was tiny, and the last validation passed" | Run `loop.py carry`. It carries a fix that only rewrote `//` comments. Any other gets a validation: the pull request claims what that validation saw. |
+| "Round 1 blocked, so the reviews should wait for its fix" | They are already running on the same commit. One fix answers all three files. |
 | "Every finding is about the validator's own script; the implementer can decline them" | Route on the `tooling` label: the next runner repairs its scripts. A decline only buys another round to rule on it. |
 | "Architecture round 2 raised a good new point" | Round 2 rules only on round 1's requests. New points are notes for the human. |
 | "I'll chain these few commands in one call" | One plain command per call, or a `loop.py` subcommand. A refused chain is a retry, and a variable or `$(…)` never survives the guard. |
-| "These four calls are independent, I'll batch them" | Not a row's edit, its commit and the dispatch it routes to. The dispatch waits for the commit. |
+| "These calls are independent, I'll batch them" | Not a row and the dispatch it routes to. The dispatch waits for the row's commit. |
 | "The implementer handed back `(waiting)`, I'll dispatch it again" | It is still running until its completion notification. Wait for that, then ask it with SendMessage. |
 | "The human is away, I'll start the next task" | Stop. The next task branches from a feature branch that includes this one. |
 | "The finding contradicts the task file, I'll skip it" | The implementer declines it, quoting the task file. A V or A decline is ruled on by the next round of its stage. An R or U decline goes to the human in the pull request. |

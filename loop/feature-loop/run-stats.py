@@ -12,6 +12,9 @@ every gap of STALL_MIN or more between two transcript events: a stream that was 
 a permission or classifier timeout, a human interrupt. Those count under Stalls instead.
 A run the human stopped is left out, and counted in a line between the tables.
 
+Between the two tables, the orchestrator: for each task, the main session's largest context,
+its turns and tool calls while it was routing that task, and its turns per dispatch.
+
 Given a task, this prints what the orchestrator commits as runs/<NN>/stats.md, and its last
 line is that task's total.
 """
@@ -90,6 +93,38 @@ def read_run(path):
                 tools=tools, wall=sum(gaps), active=sum(gaps) - sum(stalls), stalls=len(stalls))
 
 
+def read_orchestrator(path, feature, into):
+    """Add a main session's turns to {task: [peak, turns, tools, dispatches]}.
+
+    A turn counts for the task whose files its tool calls last named.
+    """
+    mark = re.compile(r'docs/tasks/([^/\s"]+)/(?:runs/(\w+)|(?!00-)(\w+)-)')
+    task, seen = None, set()
+    with open(path) as f:
+        for line in f:
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            message = event.get('message') if isinstance(event, dict) else None
+            if not isinstance(message, dict) or event.get('type') != 'assistant':
+                continue
+            calls = [b for b in message.get('content') or []
+                     if isinstance(b, dict) and b.get('type') == 'tool_use']
+            for m in mark.finditer(json.dumps([b.get('input') for b in calls])):
+                task = (m.group(2) or m.group(3)) if m.group(1) == feature else None
+            if task is None:
+                continue
+            row, usage = into.setdefault(task, [0, 0, 0, 0]), message.get('usage') or {}
+            row[0] = max(row[0], usage.get('input_tokens', 0) + usage.get('cache_creation_input_tokens', 0)
+                         + usage.get('cache_read_input_tokens', 0))
+            if message.get('id') not in seen:
+                seen.add(message.get('id'))
+                row[1] += 1
+            row[2] += len(calls)
+            row[3] += sum(b.get('name') in ('Agent', 'Task') for b in calls)
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
@@ -119,6 +154,18 @@ def main():
 
     if stopped:
         print(f"\nLeft out: {stopped} run{'s' if stopped > 1 else ''} stopped by the human.")
+
+    orchestrator = {}
+    for directory in project_dirs():
+        for path in glob.glob(f'{directory}/*.jsonl'):
+            read_orchestrator(path, feature, orchestrator)
+    rows = sorted((t, r) for t, r in orchestrator.items() if only in (None, t))
+    if rows:
+        print('\n| Task | Orchestrator context | Turns | Tools | Turns per dispatch |')
+        print('|---|---|---|---|---|')
+        for t, (peak, turns, tools, dispatches) in rows:
+            print(f'| {t} | {peak // 1000}k | {turns} | {tools} | {turns / dispatches:.1f} |' if dispatches
+                  else f'| {t} | {peak // 1000}k | {turns} | {tools} | |')
 
     print('\n| Task | Runs | Largest context | Total context | Over 50k | Active min | Wall min |')
     print('|---|---|---|---|---|---|---|')
