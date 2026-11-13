@@ -188,7 +188,7 @@ Who rules, by prefix:
   disputed.
 - **`A`**: the next architecture round. A fix is `accepted` or `reopened`. A decline is
   `accepted` or `disputed`. A finding the refactor left unaddressed is `reopened`.
-- **`R` and `U`**: nobody. `fixed` stands, since the final validation after it reruns the
+- **`R` and `U`**: nobody. `fixed` stands, since the validation after it reruns the
   whole contract without ruling on these ids. `declined` goes to the human in the pull request.
 
 ## For the PR

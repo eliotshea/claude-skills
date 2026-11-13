@@ -43,7 +43,7 @@ handoff-format.md's "Commands" gives, and never `$` followed by a digit in this 
    .claude/worktrees/<feature-branch> <feature-branch>`. If that fails because the branch is
    checked out somewhere else, ask the human. Switch in with EnterWorktree and its `path`.
    Every agent runs in this worktree, one at a time, but for the design and code reviews,
-   which change no code and run together.
+   which change no code and run beside the build's validation.
 3. **Runnable and clean.** Copy `.env` from the main checkout root if the worktree lacks it;
    it is gitignored and the build fails without it. Run `pnpm install` if `node_modules` is
    missing. `git fetch origin`. If `git status --porcelain` shows changes while a task branch
@@ -133,7 +133,7 @@ progress, not a cut-off step. Wait for its notification before anything below.
   paths: `survey.md` is the scout, `brief.md` is the brief writer, the script dir or
   `evidence-<n>.md` is the runner, `validation-<n>.md` is the reporter, `architecture-<n>.md`
   is the architect, `review-1.md` is the code reviewer, and code outside the run dir is the
-  implementer. Architecture round 1 and the code review run together, so both can be cut off.
+  implementer. The build's validation and the reviews run together, so several can be cut off.
   Dispatch each cut-off agent again with its prompt plus
   `Previous attempt: interrupted. Its commits since the last log row and any uncommitted
   changes are in the tree. Finish the job.`
@@ -143,54 +143,53 @@ progress, not a cut-off step. Wait for its notification before anything below.
 ```dot
 digraph feature_loop {
   node [shape=box];
-  survey; brief; build; validate; report; fix; "design and code review"; "review fix";
+  survey; brief; build; "validate, design and code review"; fix; validate;
   "architect round 2+"; refactor;
   "human feedback" [shape=ellipse];
-  "PASS?" [shape=diamond];
+  "all clean?" [shape=diamond]; "PASS?" [shape=diamond];
   "open or update PR, stop" [shape=doublecircle];
 
-  survey -> brief -> build -> validate -> report -> "PASS?";
+  survey -> brief -> build -> "validate, design and code review" -> "all clean?";
+  "all clean?" -> "open or update PR, stop" [label="PASS, CLEAN, APPROVED"];
+  "all clean?" -> fix [label="any open finding"];
+  "all clean?" -> validate [label="tooling findings only"];
+  fix -> validate -> "PASS?";
   "PASS?" -> fix [label="BLOCKED"];
   "PASS?" -> validate [label="BLOCKED, tooling only"];
-  fix -> validate;
-  "PASS?" -> "design and code review" [label="PASS, not final"];
-  "PASS?" -> "architect round 2+" [label="PASS, final, design changes requested"];
-  "PASS?" -> "open or update PR, stop" [label="PASS, final"];
-  "design and code review" -> "review fix" [label="FINDINGS or CHANGES REQUESTED"];
-  "design and code review" -> validate [label="CLEAN and APPROVED, code changed since the last PASS"];
-  "design and code review" -> "open or update PR, stop" [label="CLEAN and APPROVED, carry"];
-  "review fix" -> validate;
+  "PASS?" -> "architect round 2+" [label="PASS, design changes were requested"];
+  "PASS?" -> "open or update PR, stop" [label="PASS"];
   "architect round 2+" -> "open or update PR, stop" [label="APPROVED"];
   "architect round 2+" -> refactor [label="CHANGES REQUESTED, granted"];
   refactor -> validate;
   "open or update PR, stop" -> "human feedback" [style=dashed];
-  "human feedback" -> "review fix";
+  "human feedback" -> fix;
 }
 ```
 
-After the build's validation passes, the design review (architect round 1) and the code
-review run at once, on the same commit, and one review fix answers both files. A style-only
-or chore-only task gets the code review alone. Architect round 2 and later run only after a
-final validation passes while the design review still has changes requested, and rule only
-on round 1's requests.
+The build is checked three ways at once, on the same commit: validation round 1, the design
+review (architect round 1) and the code review. A style-only or chore-only task gets no
+design review. One fix answers every open finding in the three files, and the validation
+after it is what the pull request claims. So the fix for a blocked round 1 is not itself
+reviewed, as a review fix never was. Architect round 2 and later run only after a validation
+passes while the design review still has changes requested, and rule only on round 1's
+requests.
 
 A **stage** is one piece of implementation work and the validation rounds that follow it.
-There are four kinds: the build, a review fix, a refactor and a feedback fix. Reviews with
-nothing to fix also start a stage, one that begins at its validation. Each stage allows 3 fix
+There are three kinds: the build, a refactor and a feedback fix. Each stage allows 3 fix
 rounds, counted from the stage's start or from the latest `grant` row for that stage.
 
-A validation is **final** when its stage began at the reviews or later. Only a final
-validation that passes opens or updates the pull request.
+Every validation runs the whole contract, so any that passes can open or update the pull
+request, and `Final:` is always `yes`.
 
-**A passing round carries.** Before every final validation, run
+**A passing round carries.** Before every validation but the build's first, run
 
     python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py carry <run dir>
 
 `carry <n>` means validation n passed at the code that is there now, and a round at that same
-code ran the regression suite green: a final round would check the same commit again and
+code ran the regression suite green: another round would check the same commit again and
 find what n found. Log a `validation carried` row (Result `validation <n> carried`), and route
-as on a final PASS. `validate: <why>` means run it. A review fix, a feedback fix or a refactor
-gets `validate` unless all it changed was whole `//` comment lines.
+as on a PASS. `validate: <why>` means run it. A fix or a refactor gets
+`validate` unless all it changed was whole `//` comment lines.
 
 **Tooling findings.** A finding labelled `tooling` (`### V3-1 · tooling`) is about the
 validator's own scripts or the loop's tools, such as a mask that moves or a base worktree
@@ -243,11 +242,10 @@ then the agent-specific ones below. Each agent's own definition says what to do 
 | brief | `eliot:brief-writer` | `Base branch: <feature-branch>`, `Survey file: <run dir>/survey.md` |
 | brief, chore only | `eliot:brief-writer` | `Base branch: <feature-branch>`, `Mode: chore` |
 | build | `eliot:task-implementer` | `Mode: build` |
-| fix | `eliot:task-implementer` | `Mode: fix`, `Findings: <run dir>/validation-<n>.md: <ids>` |
 | refactor | `eliot:task-implementer` | `Mode: refactor`, `Findings: <run dir>/architecture-<n>.md: <ids>` |
-| review fix | `eliot:task-implementer` | `Mode: review-fix`, then one `Findings: <file>: <ids>` line for each of `<run dir>/review-1.md` and `<run dir>/architecture-1.md` that has open ids, or for `<run dir>/feedback-<k>.md` |
-| validate | `eliot:task-validator` | `Round: <latest validation + 1>`, `Final: <yes or no>`, `Kind: <full, style only or chore only>`, `Script dir: tests/validation/<feature>`, `Previous validation: <run dir>/validation-<latest>.md or none`, `VALIDATION_PORT: <port>` |
-| report | `eliot:validation-reporter` | `Round: <the round the runner just ran>`, `Final: <yes or no>`, `Kind: <as the runner's>`, `Evidence file: <run dir>/evidence-<n>.md`, `Previous validation: <run dir>/validation-<n-1>.md or none`, `Script dir: tests/validation/<feature>`, `VALIDATION_PORT: <port>` |
+| fix | `eliot:task-implementer` | `Mode: fix` when every id is a validation finding, otherwise `Mode: review-fix`. Then one `Findings: <file>: <ids>` line for each of the latest validation file, `<run dir>/review-1.md` and `<run dir>/architecture-1.md` that has open ids, or for `<run dir>/feedback-<k>.md` |
+| validate | `eliot:task-validator` | `Round: <latest validation + 1>`, `Final: yes`, `Kind: <full, style only or chore only>`, `Script dir: tests/validation/<feature>`, `Previous validation: <run dir>/validation-<latest>.md or none`, `VALIDATION_PORT: <port>` |
+| report | `eliot:validation-reporter` | `Round: <the round the runner just ran>`, `Final: yes`, `Kind: <as the runner's>`, `Evidence file: <run dir>/evidence-<n>.md`, `Previous validation: <run dir>/validation-<n-1>.md or none`, `Script dir: tests/validation/<feature>`, `VALIDATION_PORT: <port>` |
 | architect | `eliot:architect-reviewer` | `Round: <n>`, `Previous architecture: <run dir>/architecture-<n-1>.md or none` |
 | code review | `eliot:code-reviewer` | `Round: 1` |
 
@@ -261,8 +259,9 @@ Validation rounds are numbered across the whole task, and `Previous validation` 
 latest one, whatever stage it came from. A validation is two dispatches: the runner, then the
 reporter on the evidence it wrote. They share the round's number.
 
-The design and code reviews are two dispatches in one message, so they run at once. Each
-gets its own row when it returns.
+After the build, the validation runner and the reviews are dispatched in one message, so
+they run at once. Each gets its own row when it returns, and the reporter is dispatched as
+soon as the runner's row is in.
 
 ## Routing on a result
 
@@ -306,24 +305,20 @@ After each agent returns:
 | Scout wrote the survey | brief |
 | Brief writer wrote the brief | build |
 | Implementer's `Blocked:` is not `none` | Escalate. |
-| Implementer returned, Final yes for its stage | `loop.py carry`: carried, or validate, final |
-| Implementer returned | validate, with Final from the stage it is in |
+| The build's implementer returned | validate, architecture round 1 and code review, at once. Style only or chore only: validate and code review |
+| Any other implementer returned | `loop.py carry`: carried, or validate |
 | Runner wrote the evidence | report, same round |
+| Validation round 1's report, architecture round 1 or the review returned, and another of those three that was dispatched has no row yet | Wait for it while it runs. After a resume, dispatch it. |
 | Validation `Repeat:` names an id that no `grant` row for this stage names | Escalate. A fix did not hold. |
 | Validation BLOCKED, and this stage has had 3 fix rounds | Escalate. |
-| Validation BLOCKED, and `loop.py findings <file> --label tooling --count` equals Blocking | validate, same Final, no fix |
-| Validation BLOCKED | fix |
-| Validation PASS, final, or `validation carried`, and the latest architecture file is CHANGES REQUESTED | architecture, with round = the latest architecture round + 1 |
-| Validation PASS, final, or `validation carried`, and `log.md` has a `pull request` row | update the pull request |
-| Validation PASS, final, or `validation carried` | open the pull request |
-| Validation PASS, style only or chore only | code review |
-| Validation PASS | architecture round 1 and code review, at once |
-| Architecture round 1 or review returned, neither style only nor chore only, and the other has no row yet | Wait for the other while it runs. After a resume, dispatch it. |
-| Review CLEAN, and architecture round 1 APPROVED or skipped | `loop.py carry`: carried, or validate, final |
-| Review or architecture round 1 returned | review fix, with the open ids of both files |
-| Architecture APPROVED | as on a final PASS: update or open the pull request |
-| Architecture CHANGES REQUESTED, and a `grant: architecture round <this round>` row exists | refactor |
-| Architecture CHANGES REQUESTED | Escalate. |
+| Validation BLOCKED, `loop.py findings <file> --label tooling --count` equals Blocking, and neither `review-1.md` nor `architecture-1.md` has open ids | validate, no fix |
+| Validation BLOCKED, or `review-1.md` or `architecture-1.md` has open ids | fix, with the open ids of every one of the three files |
+| Validation PASS or `validation carried`, and the latest architecture file is CHANGES REQUESTED | architecture, with round = the latest architecture round + 1 |
+| Validation PASS or `validation carried`, and `log.md` has a `pull request` row | update the pull request |
+| Validation PASS or `validation carried` | open the pull request |
+| Architecture round 2 or later APPROVED | as on a PASS: update or open the pull request |
+| Architecture round 2 or later CHANGES REQUESTED, and a `grant: architecture round <this round>` row exists | refactor |
+| Architecture round 2 or later CHANGES REQUESTED | Escalate. |
 
 ## Escalating
 
@@ -341,7 +336,7 @@ failed twice leaves a good survey and no brief.
 Applying the answer:
 
 - **Another round.** Log a `grant` row. Its Result is `grant: <stage>, <ids>` after a cap or a
-  Repeat, naming the stage (e.g. `build`, `refactor 1`, `review fix`) and the ids that were
+  Repeat, naming the stage (e.g. `build`, `refactor 1`, `feedback fix 1`) and the ids that were
   blocking or repeated. After an architecture refusal it is `grant: architecture round <n>`.
   Then route again on the same result. A stage grant resets that stage's fix count and stops
   its named Repeat ids escalating again within the stage. An architecture grant lets that
@@ -489,8 +484,8 @@ context of all its runs added up, and the minutes. It includes the test-writers 
 code-writers the implementer starts and retries that got no row, and leaves out runs the
 human stopped. Each task's `stats.md` is this output for that task alone.
 
-The implementer's own Context stays small because it reads no code: each tdd cycle runs in a
-`test-writer` and a `code-writer` of its own. `stats.md` gives each of them, and the largest
+The implementer's own Context stays small because it reads no code: each tdd cycle runs in
+agents of its own. `stats.md` gives each of them, and the largest
 is the number to watch for code spread over too many files. A single cycle over 50k means
 one behaviour touches more code than one window holds.
 
@@ -519,8 +514,8 @@ task whose scout could not fit the ground it had to cover.
     `none given`. Fix and Ruling are empty.
   - `## For the PR` is one line saying how many points this round raised.
 
-  Log a `feedback` row, committing the file with it, and start a feedback fix: a review fix with this file, then
-  final validation.
+  Log a `feedback` row, committing the file with it, and start a feedback fix: a fix with this
+  file, then validation.
 - **A ruling on disputed or declined findings in the pull request.** Record it as in "A ruling
   on a finding" under Escalating, without routing on the header. If the ruling asks for a
   change, write that change up as feedback. Otherwise update the pull request.
@@ -544,8 +539,8 @@ header, using Edit on those lines.
 | "The evidence file says it failed, that's a finding" | The reporter decides that. The runner's evidence is what happened, not what it means. |
 | "It's a one-line fix, I'll make it myself" | Dispatch a fix. Your edit skips the test, and the next validator would judge a commit no agent accounted for. |
 | "I'll read the validation file to understand the failure" | The implementer reads it. You route on the header. |
-| "The review fix was tiny, and the last validation passed" | Run `loop.py carry`. It carries a fix that only rewrote `//` comments. Any other gets a final validation: the pull request claims what that validation saw. |
-| "Nothing changed since the last PASS, but the table says validate, final" | Run `loop.py carry`. It carries that PASS when the code and a green regression run are the same. |
+| "The fix was tiny, and the last validation passed" | Run `loop.py carry`. It carries a fix that only rewrote `//` comments. Any other gets a validation: the pull request claims what that validation saw. |
+| "Round 1 blocked, so the reviews should wait for its fix" | They are already running on the same commit. One fix answers all three files. |
 | "Every finding is about the validator's own script; the implementer can decline them" | Route on the `tooling` label: the next runner repairs its scripts. A decline only buys another round to rule on it. |
 | "Architecture round 2 raised a good new point" | Round 2 rules only on round 1's requests. New points are notes for the human. |
 | "I'll chain these few commands in one call" | One plain command per call, or a `loop.py` subcommand. A refused chain is a retry, and a variable or `$(…)` never survives the guard. |

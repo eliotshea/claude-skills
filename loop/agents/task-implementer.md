@@ -173,8 +173,8 @@ was cut off: `git checkout` those files and rerun that green.
 **build.** Plan the cycles for every numbered criterion, then run them in order.
 
 **fix** covers validation findings. **review-fix** covers code review and human feedback,
-and the design review that ran beside the code review: do an architecture file's ids as
-refactor mode says. Read the finding and status rules, five sections of handoff-format.md
+the design review that ran beside the code review, and any validation ids handed with them:
+do an architecture file's ids as refactor mode says. Read the finding and status rules, five sections of handoff-format.md
 and not the whole file, then work through the ids one at a time:
 
     python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py section ${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/handoff-format.md -H Commands -H 'The report header' -H 'A finding' -H Status -H 'For the PR'
