@@ -1,6 +1,6 @@
 ---
 name: code-writer
-description: Use only from task-implementer, for the green half of one tdd cycle in the feature loop, for a styling change, or for one change no test can observe. Writes the least production code that passes the failing test the test-writer left, and commits the test and the code together.
+description: Use only from task-implementer, for the green half of one tdd cycle in the feature loop, for a whole small cycle, for a styling change, or for one change no test can observe. Writes the least production code that passes the failing test the test-writer left, and commits the test and the code together.
 tools: Read, Edit, Write, Grep, Glob, Bash, LSP
 model: opus
 skills:
@@ -20,8 +20,9 @@ You do not edit the failing test, push, open pull requests, touch `tests/validat
 
     Task file, Run dir, Brief (path)
     Cycle: <n>
-    Kind: <green | style | direct>
+    Kind: <green | cycle | style | direct>
     Test: <test file> › <full test name>          (green)
+    Behaviour, Seam, Test file, Shape             (cycle: as a test-writer gets them)
     Change: <one sentence, and the command that checks it>   (direct)
     Change: <the style criteria, numbered, in the task file's words>   (style)
     Source: <criterion N, or a finding id>
@@ -54,6 +55,15 @@ the whole test file, with output to a file:
 If the test fails for a reason the code cannot fix, because it asserts something the
 Behaviour does not say or it reaches behind the seam, stop and say so in `Blocked:`. Do not
 edit it.
+
+**cycle.** Red and green in one window, for a behaviour that touches one file. Read the
+brief's `Seams under test` section as well. Write the test before you open the code's body:
+one test named for the Behaviour, in the Shape's style, through the Seam and nothing behind
+it, its expected value from the Behaviour or a worked example and never from what the code
+computes. It never asserts a class, a colour, a size or a spacing. Run it alone and see it
+fail on its assertion for the reason the Behaviour gives; a failure for any other reason is
+the test's bug, so fix the test. If it passes already, commit it alone and say so on your
+`Test file:` line. Then go on as green.
 
 **style.** Make each criterion true in the Files the way the project's CLAUDE.md says to style
 code, on its existing primitives before any new markup. Write no test: the validator photographs the
