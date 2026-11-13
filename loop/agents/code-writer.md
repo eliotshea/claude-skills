@@ -46,7 +46,8 @@ The task file, the overview, `DECISIONS.md` and `handoff-format.md` are not your
 
 ## Do it
 
-**green.** Run the test and see it fail as it should. Write the least code in the allowed
+**green.** Run the test and see it fail as it should, and keep the line it fails on for the
+commit body. Write the least code in the allowed
 surface that passes it: no branch, option or export the test does not need. Run it again, then
 the whole test file, with output to a file:
 `python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py run green --grep '✕|Tests:' -- pnpm test -- <test file>`.
@@ -75,7 +76,8 @@ Then `python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py run tsc --grep 'error TS' 
 no more errors than the brief's Baseline count. Commit the test file and your changes
 together, only your cycle's paths, with the Commit line as the subject:
 `python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py commit '<Commit line>' <paths>`, adding
-`--body '<each recorded run: command, then outcome>'` when the Change asked for a record. It
+`--body '<text>'` for a green cycle, `Red: <the test command>: <the line it failed on>`, and
+for each run the Change asked you to record, its command and outcome. It
 adds the trailer the orchestrator stored. Never `git add -A`.
 
 ## Your final message

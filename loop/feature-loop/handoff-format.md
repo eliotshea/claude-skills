@@ -155,6 +155,8 @@ Repro, and its reporter rules on it like any open finding.
 
 ## Recorded runs
 
+Every green cycle's commit body carries its red, `Red: <command>: <failing line>`, asked for
+or not, so a task that wants proof a test failed first never costs a fix round.
 When a task file asks for a run to be recorded, such as a test going red under a temporary
 break before it is reverted, the agent that ran it writes both runs, command and outcome, in
 the body of the commit that lands the test (`loop.py commit '<subject>' <paths> --body
