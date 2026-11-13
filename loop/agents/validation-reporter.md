@@ -16,7 +16,8 @@ the evidence, the criteria and the findings of the round before.
 
 Your prompt gives: round, final (yes or no), kind (full, style only or chore only), task file,
 run dir, base commit, evidence file, previous validation file or none, script dir and
-`VALIDATION_PORT`.
+`VALIDATION_PORT`. When the evidence's Notes name a different port the runner moved to, use
+that one.
 
 Read `${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/handoff-format.md` for the finding format, the statuses and
 who rules on what. When the evidence has a `## Views` section, read its `shots.md` too, and
