@@ -329,12 +329,13 @@ def test_cleanup_keeps_logs_and_folds_stats(repo):
         write(repo, f'{f}/{gone}', 'gone\n')
     loop(repo, 'commit', 'docs: runs', f)
     out = loop(repo, 'cleanup', f).stdout
-    assert 'removed 9 run and plan files, folded 1 stats totals, kept 1 fixed findings' in out
+    assert 'removed 10 run and plan files, folded 1 stats totals, kept 1 fixed findings' in out
     assert 'no stats total for task 02' in out
     staged = git(repo, 'diff', '--cached', '--name-status').splitlines()
     assert sorted(staged) == sorted([f'D\t{f}/runs/01/brief.md', f'D\t{f}/runs/01/stats.md',
                                      f'D\t{f}/runs/01/review-1.md', f'A\t{f}/runs/findings.md',
                                      f'A\t{f}/runs/stats.md', f'D\t{f}/runs/02/shots/before/x.png',
+                                     f'D\t{f}/01-a.md',
                                      *(f'D\t{f}/{gone}' for gone in ('PLAN.md', 'EVALUATION.md', 'plans/PLAN-A.md',
                                                                     'readiness/01.md', 'grill/spec.md'))])
     kept = open(os.path.join(repo, f'{f}/runs/findings.md')).read()

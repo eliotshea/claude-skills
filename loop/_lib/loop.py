@@ -50,8 +50,8 @@ row appends the next whole-numbered row to `<run dir>/log.md` and commits it, wi
 paths, as `docs(<feature>): loop task <NN> row <#>`. --check first reads that file's header,
 fails without writing a row when it is missing or invalid, and prints it to route on.
 pr-body writes `runs/<NN>/pr-body.md` from the run files without anyone reading them.
-cleanup removes every run file but each `log.md`, and the plan's drafts, evaluation, PLAN.md,
-readiness and grill files, prunes the atlas, folds every `stats.md` total into `runs/stats.md`
+cleanup removes every run file but each `log.md`, the task files, and the plan's drafts,
+evaluation, PLAN.md, readiness and grill files, prunes the atlas, folds every `stats.md` total into `runs/stats.md`
 and every finding that led to a fix into `runs/findings.md`, and stages it all. It commits nothing. It names every task with a
 log but no stats total, so the feature's totals never come out short without saying so.
 section prints the `## ` sections with these exact headings, each under its heading line, or
@@ -399,6 +399,7 @@ def cmd_cleanup(a):
              for h, fields in findings(p) if fields.get('Fix') and not fields['Fix'].startswith('Declined')]
     doomed = [p for p in git('ls-files', '--', f'{f}/runs').splitlines() if not p.endswith('/log.md')]
     doomed += git('ls-files', '--', *(f'{f}/{p}' for p in PLAN_DRAFTS)).splitlines()
+    doomed += [p for p in git('ls-files', '--', f'{f}/*.md').splitlines() if TASK.match(os.path.basename(p))]
     if doomed:
         git('rm', '-q', '--', *doomed)
     run(sys.executable, ATLAS_PY, 'prune', 'HEAD', '--stale')

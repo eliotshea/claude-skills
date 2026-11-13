@@ -442,8 +442,8 @@ cleanup starts from.
 
    `-B` rebuilds the branch if a cut-off cleanup left one behind. Note the starting commit,
    `git rev-parse --short HEAD`, for the body.
-3. **Condense.** `loop.py cleanup <feature>` removes every run file but each `log.md`, and the
-   plan's drafts, evaluation, `PLAN.md`, readiness and grill files. It prunes the atlas of gone
+3. **Condense.** `loop.py cleanup <feature>` removes every run file but each `log.md`, the
+   task files, and the plan's drafts, evaluation, `PLAN.md`, readiness and grill files. It prunes the atlas of gone
    and stale entries, folds every `runs/<NN>/stats.md` total into `runs/stats.md` and every
    finding that led to a fix into `runs/findings.md`, and stages it all. When it prints
    `no stats total for task <NN>…`, run `run-stats.py <feature> <NN>` for each, add its last
@@ -451,8 +451,8 @@ cleanup starts from.
    in the body as missing from the totals.
 
    What stays is what a later feature or a tuning pass reads: each `log.md`, `runs/stats.md`,
-   `runs/findings.md`, `plan-log.md`, `DECISIONS.md`, `00-overview.md`, the task files,
-   `PROGRESS.md`, the atlas's fresh entries and the validation scripts in
+   `runs/findings.md`, `plan-log.md`, `DECISIONS.md`, `00-overview.md` (the next feature's
+   cutter takes its rules from it), `PROGRESS.md`, the atlas's fresh entries and the validation scripts in
    `tests/validation/<feature>/`.
 4. **Commit and push.** `loop.py commit 'docs(<feature>): clean up loop run files'` commits
    what the cleanup staged. `git push --force-with-lease -u origin <feature-branch>-cleanup`.
