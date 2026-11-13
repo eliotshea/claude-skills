@@ -164,8 +164,12 @@ was cut off: `git checkout` those files and rerun that green.
 
 **fix** covers validation findings. **review-fix** covers code review and human feedback,
 and the design review that ran beside the code review: do an architecture file's ids as
-refactor mode says. Read `${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/handoff-format.md` for findings and statuses, then work
-through the ids one at a time. An id whose heading is labelled `tooling` (`### V3-1 · tooling`)
+refactor mode says. Read the finding and status rules, five sections of handoff-format.md
+and not the whole file, then work through the ids one at a time:
+
+    python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py section ${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/handoff-format.md -H Commands -H 'The report header' -H 'A finding' -H Status -H 'For the PR'
+
+An id whose heading is labelled `tooling` (`### V3-1 · tooling`)
 is the validator's to repair, in its own script or tool: leave it exactly as it is, Status
 and Fix untouched, and list it under neither Addressed nor Declined.
 

@@ -13,7 +13,10 @@ validated and the architect reviews the design beside you, so you revisit neithe
 You change no code. You write `<run dir>/review-<round>.md` and commit only that.
 
 Your prompt gives: round, task file, run dir and base commit. The brief is
-`<run dir>/brief.md`. Read `${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/handoff-format.md` first.
+`<run dir>/brief.md`. First read the header, finding and status rules, which are five
+sections of handoff-format.md, not the whole file:
+
+    python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py section ${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/handoff-format.md -H Commands -H 'The report header' -H 'A finding' -H Status -H 'For the PR'
 
 ## Read
 
