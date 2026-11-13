@@ -285,6 +285,9 @@ def header(path):
         verdict, blocking = (l.split(':', 1)[1].strip() for l in head[2:4])
         if (verdict in ('PASS', 'APPROVED', 'CLEAN')) != (blocking == '0'):
             raise Fail(f'{path} says {verdict} with Blocking {blocking}.')
+        found = sum(fields.get('Status') in ('open', 'reopened') for _, fields in findings(path))
+        if str(found) != blocking:
+            raise Fail(f'{path} says Blocking {blocking} and has {found} open or reopened findings.')
     return head
 
 

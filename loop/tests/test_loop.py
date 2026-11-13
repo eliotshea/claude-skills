@@ -203,8 +203,13 @@ def test_row_checks_the_header_then_appends_and_commits(repo):
     bad = loop(repo, 'row', run_dir, 'validation 1 report', 'validation-reporter', 'PASS',
                '--check', f'{run_dir}/validation-1.md', check=False)
     assert bad.returncode == 1 and 'PASS with Blocking 2' in bad.stderr
+    blocked = '# Validation 1: task 02\nCommit: x\nVerdict: BLOCKED\nBlocking: 2\nDisputed: 0\nRepeat: none\n'
+    write(repo, f'{run_dir}/validation-1.md', blocked + '\n### V1-1 · gate\nStatus: open\n')
+    bad = loop(repo, 'row', run_dir, 'validation 1 report', 'validation-reporter', 'BLOCKED',
+               '--check', f'{run_dir}/validation-1.md', check=False)
+    assert bad.returncode == 1 and 'Blocking 2 and has 1 open' in bad.stderr
     write(repo, f'{run_dir}/validation-1.md',
-          '# Validation 1: task 02\nCommit: x\nVerdict: BLOCKED\nBlocking: 2\nDisputed: 0\nRepeat: none\n')
+          blocked + '\n### V1-1 · gate\nStatus: open\n### V1-2 · gate\nStatus: reopened\n### V1-3 · gate\nStatus: fixed\n')
     out = loop(repo, 'row', run_dir, 'validation 1 report', 'validation-reporter', 'BLOCKED, 2 blocking',
                '--check', f'{run_dir}/validation-1.md', '--file', 'validation-1.md', '--usage', '34k 9 2').stdout
     assert out.startswith('# Validation 1: task 02\nCommit: x\nVerdict: BLOCKED\n')
