@@ -49,7 +49,9 @@ master's, row 0's commit takes master's.
 row appends the next whole-numbered row to `<run dir>/log.md` and commits it, with any --with
 paths, as `docs(<feature>): loop task <NN> row <#>`. --check first reads that file's header,
 fails without writing a row when it is missing or invalid, and prints it to route on.
-pr-body writes `runs/<NN>/pr-body.md` from the run files without anyone reading them.
+pr-body writes `runs/<NN>/pr-body.md` from the run files without anyone reading them. A
+task's pictures never reach a branch: it commits `runs/<NN>/shots` to
+`refs/loop-shots/<feature>`, pushes that ref and links the pictures at that commit.
 cleanup removes every run file but each `log.md`, the task files, and the plan's drafts,
 evaluation, PLAN.md, readiness and grill files, prunes the atlas, folds every `stats.md` total into `runs/stats.md`
 and every finding that led to a fix into `runs/findings.md`, and stages it all. It commits nothing. It names every task with a
@@ -351,6 +353,25 @@ def matching(paths, status):
             for h, fields in findings(p) if fields.get('Status') == status]
 
 
+def push_shots(name, d):
+    """Commit the pictures in <d> to refs/loop-shots/<feature>, which no clone or fetch
+    downloads and no branch ever merges, push it, and return the commit the PR links."""
+    ref = f'refs/loop-shots/{name}'
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {**os.environ, 'GIT_INDEX_FILE': os.path.join(tmp, 'index')}
+        subprocess.run(['git', 'add', '-f', '--', d], env=env, check=True, capture_output=True)
+        tree = subprocess.run(['git', 'write-tree'], env=env, check=True, capture_output=True,
+                              text=True).stdout.strip()
+    run('git', 'fetch', '-q', 'origin', f'+{ref}:{ref}', check=False)
+    parent = run('git', 'rev-parse', '-q', '--verify', ref, check=False).stdout.strip()
+    if parent and git('rev-parse', f'{parent}^{{tree}}') == tree:
+        return parent
+    sha = git('commit-tree', tree, *(['-p', parent] if parent else []), '-m', f'shots: {d}')
+    git('update-ref', ref, sha)
+    git('push', '-q', 'origin', f'{sha}:{ref}')
+    return sha
+
+
 def cmd_pr_body(a):
     name, f = feature_name(a.feature), feature_dir(a.feature)
     d = f'{f}/runs/{a.task}'
@@ -364,7 +385,7 @@ def cmd_pr_body(a):
            '', '## Validation', for_the_pr(validation)]
     shots = f'{d}/shots/shots.md'
     if os.path.exists(shots):
-        sha = git('log', '-1', '--format=%H', '--', f'{d}/shots')
+        sha = push_shots(name, f'{d}/shots')
         repo = run('gh', 'repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner').stdout.strip()
         url = f'https://github.com/{repo}/blob/{sha}/{d}/shots'
         rows = [re.sub(r'\]\((before|after|diff)/([^)]*)\)', lambda m: f']({url}/{m.group(1)}/{m.group(2)}?raw=true)', l)

@@ -248,9 +248,9 @@ Three header lines, then the sections. No verdict and no finding ids anywhere in
     Anything you noticed that no item covers, one line each. Flakes go here.
 
 Commit your scripts and your evidence together, and nothing else:
-`python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py commit 'test(validation): task <NN> round <round>' <script dir> <run dir>/evidence-<round>.md <run dir>/shots`.
-Leave `<run dir>/shots` out when the task has no views. It adds the trailer the orchestrator
-stored.
+`python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py commit 'test(validation): task <NN> round <round>' <script dir> <run dir>/evidence-<round>.md`.
+It adds the trailer the orchestrator stored. The pictures under `<run dir>/shots` are never
+committed: they are ignored there, and the pull request step pushes them to a ref of their own.
 
 ## Your final message
 

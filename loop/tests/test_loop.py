@@ -294,9 +294,15 @@ def test_pr_body_style_only_shots_and_no_disputes(repo):
     write(repo, f'{RUN}/validation-1.md', report('Validation', 1, '## For the PR\nV\n'))
     write(repo, f'{RUN}/review-1.md', report('Review', 1, '## For the PR\nR\n'))
     write(repo, f'{RUN}/shots/shots.md', '# Shots\n| c1 | ![b](before/a.png) | ![a](after/a.png) |\n')
-    loop(repo, 'commit', 'docs: shots', f'{RUN}/shots')
-    sha = git(repo, 'rev-parse', 'HEAD')
+    write(repo, f'{RUN}/shots/before/a.png', 'png')
+    write(repo, f'{RUN}/shots/.gitignore', '*\n')  # as shots.py leaves it: no branch carries pictures
     loop(repo, 'pr-body', FEATURE, '04')
+    sha = git(repo, 'ls-remote', 'origin', f'refs/loop-shots/{FEATURE}').split()[0]
+    assert git(repo, 'ls-tree', '-r', '--name-only', sha).splitlines() == [
+        f'{RUN}/shots/.gitignore', f'{RUN}/shots/before/a.png', f'{RUN}/shots/shots.md']
+    assert 'shots' not in git(repo, 'status', '--porcelain', '--', f'{RUN}/shots')
+    loop(repo, 'pr-body', FEATURE, '04')  # unchanged pictures push no second commit
+    assert git(repo, 'ls-remote', 'origin', f'refs/loop-shots/{FEATURE}').split()[0] == sha
     body = open(os.path.join(repo, f'{RUN}/pr-body.md')).read()
     assert '## Design review\nSkipped: style or chore only.' in body
     assert '## Disputed, for you to settle\nNone.' in body

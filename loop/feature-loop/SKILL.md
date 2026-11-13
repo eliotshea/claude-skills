@@ -131,7 +131,7 @@ progress, not a cut-off step. Wait for its notification before anything below.
 - **Commits or uncommitted changes from an agent:** the step the last row routed to was cut
   off. `git status --porcelain` says which agent it was, because each one writes its own
   paths: `survey.md` is the scout, `brief.md` is the brief writer, the script dir or
-  `evidence-<n>.md` or `shots/` is the runner, `validation-<n>.md` is the reporter, `architecture-<n>.md`
+  `evidence-<n>.md` is the runner, `validation-<n>.md` is the reporter, `architecture-<n>.md`
   is the architect, `review-1.md` is the code reviewer, and code outside the run dir is the
   implementer. Architecture round 1 and the code review run together, so both can be cut off.
   Dispatch each cut-off agent again with its prompt plus
@@ -362,8 +362,9 @@ Applying the answer:
 ## The pull request
 
 1. **Body.** Build `runs/<NN>/pr-body.md`. It stitches each run file's `## For the PR` section
-   together without you reading them, from the latest validation and architecture files, and
-   ends with the pull request lines you stored:
+   together without you reading them, from the latest validation and architecture files,
+   pushes the task's pictures to `refs/loop-shots/<feature>`, a ref no clone fetches and no
+   branch merges, and ends with the pull request lines you stored:
 
        python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py pr-body <feature> <NN>
 
