@@ -205,14 +205,15 @@ def test_cli_with_no_matching_transcripts(repo, home):
 
 def test_cli_prints_both_tables(repo, home):
     sub = home.project / 'session-1' / 'subagents'
-    write_run(sub, 'agent-b', 'brief-writer', events(prompt('feat-a', '01'), minutes=(5, 6, 8)))
+    # Plugin agents are recorded with their prefix, as Claude Code records them now.
+    write_run(sub, 'agent-b', 'eliot:brief-writer', events(prompt('feat-a', '01'), minutes=(5, 6, 8)))
     write_run(sub, 'agent-a', 'task-scout', events(prompt('feat-a', '01', 'Round: 1'),
                                                    minutes=(0, 1, 15, 16), tools=1))
     big = {'input_tokens': 60_000}
     write_run(sub, 'agent-c', 'task-validator',
               events(prompt('feat-a', '02'), minutes=(0, 4), usage=big))
     # Nested one level deeper, as runs the implementer starts are.
-    write_run(sub / 'nested', 'agent-d', 'test-writer',
+    write_run(sub / 'nested', 'agent-d', 'eliot:test-writer',
               events(prompt('feat-a', '02'), minutes=(10, 11)))
     write_run(sub, 'agent-e', 'task-scout', events(prompt('other-feature', '01')))
     result = run(repo, home, 'feat-a')

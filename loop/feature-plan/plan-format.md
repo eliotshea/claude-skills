@@ -291,6 +291,10 @@ one task needs.
 
     ## How every task is validated
     ### 1. Automated
+    Its file-map check, and every task check that expects an exact list of changed files, uses
+    the pathspec the reviewers use, which leaves out the files the loop itself commits (run
+    logs, the atlas, validation scripts):
+    `git diff --name-only <feature branch>...HEAD -- . ':!docs/tasks' ':!tests/validation'`.
     ### 2. Agent browser checks
     ### 3. Owner checks
 
