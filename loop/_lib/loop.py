@@ -404,8 +404,15 @@ def cmd_pr_body(a):
     print(f'{d}/pr-body.md: {len(disputed)} disputed')
 
 
+def rows(path):
+    """The table rows an earlier cleanup folded into <path>, so a second run keeps them."""
+    return ([l for l in read(path).splitlines() if l.startswith('| ') and not l.startswith('| Task')]
+            if os.path.exists(path) else [])
+
+
 def cmd_cleanup(a):
     name, f = feature_name(a.feature), feature_dir(a.feature)
+    kept = (f'{f}/runs/stats.md', f'{f}/runs/findings.md')
     totals = [read(s).rstrip('\n').splitlines()[-1] for s in sorted(glob.glob(f'{f}/runs/*/stats.md'))
               if read(s).strip()]
     folded = {t.split('|')[1].strip() for t in totals if t.startswith('|')}
@@ -418,7 +425,9 @@ def cmd_cleanup(a):
                                      *sorted(glob.glob(f'{d}feedback-*.md'))])
              if p and os.path.exists(p)
              for h, fields in findings(p) if fields.get('Fix') and not fields['Fix'].startswith('Declined')]
-    doomed = [p for p in git('ls-files', '--', f'{f}/runs').splitlines() if not p.endswith('/log.md')]
+    totals, fixed = rows(kept[0]) + totals, rows(kept[1]) + fixed
+    doomed = [p for p in git('ls-files', '--', f'{f}/runs').splitlines()
+              if not p.endswith('/log.md') and p not in kept]
     doomed += git('ls-files', '--', *(f'{f}/{p}' for p in PLAN_DRAFTS)).splitlines()
     doomed += [p for p in git('ls-files', '--', f'{f}/*.md').splitlines() if TASK.match(os.path.basename(p))]
     if doomed:

@@ -349,6 +349,10 @@ def test_cleanup_keeps_logs_and_folds_stats(repo):
     stats = open(os.path.join(repo, f'{f}/runs/stats.md')).read()
     assert stats.startswith(f'# {FEATURE}: task sizes\n')
     assert stats.endswith('|---|---|---|---|---|---|---|\n| 01 | 9 | 40k | 200k | 0 | 30 | 50 |\n')
+    loop(repo, 'commit', 'docs: clean up')
+    again = loop(repo, 'cleanup', f).stdout
+    assert 'removed 0 run and plan files, folded 1 stats totals, kept 1 fixed findings' in again
+    assert git(repo, 'status', '--porcelain') == ''  # a second run keeps what the first folded
 
 
 # section and ids
