@@ -190,7 +190,7 @@ validation that passes opens or updates the pull request.
 code ran the regression suite green: a final round would check the same commit again and
 find what n found. Log a `validation carried` row (Result `validation <n> carried`), and route
 as on a final PASS. `validate: <why>` means run it. A review fix, a feedback fix or a refactor
-that committed code always gets `validate`.
+gets `validate` unless all it changed was whole `//` comment lines.
 
 **Tooling findings.** A finding labelled `tooling` (`### V3-1 · tooling`) is about the
 validator's own scripts or the loop's tools, such as a mask that moves or a base worktree
@@ -542,7 +542,7 @@ header, using Edit on those lines.
 | "The evidence file says it failed, that's a finding" | The reporter decides that. The runner's evidence is what happened, not what it means. |
 | "It's a one-line fix, I'll make it myself" | Dispatch a fix. Your edit skips the test, and the next validator would judge a commit no agent accounted for. |
 | "I'll read the validation file to understand the failure" | The implementer reads it. You route on the header. |
-| "The review fix was tiny, and the last validation passed" | Run `loop.py carry`. A fix that committed code gets a final validation: the pull request claims what that validation saw. |
+| "The review fix was tiny, and the last validation passed" | Run `loop.py carry`. It carries a fix that only rewrote `//` comments. Any other gets a final validation: the pull request claims what that validation saw. |
 | "Nothing changed since the last PASS, but the table says validate, final" | Run `loop.py carry`. It carries that PASS when the code and a green regression run are the same. |
 | "Every finding is about the validator's own script; the implementer can decline them" | Route on the `tooling` label: the next runner repairs its scripts. A decline only buys another round to rule on it. |
 | "Architecture round 2 raised a good new point" | Round 2 rules only on round 1's requests. New points are notes for the human. |

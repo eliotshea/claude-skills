@@ -515,6 +515,23 @@ def test_carry_with_a_green_regression_at_the_current_code(repo):
     assert loop(repo, 'carry', CODE).stdout == 'carry 1\n'
 
 
+def test_carry_ignores_comment_lines_but_not_code_or_directives(repo):
+    attributed(repo)
+    write(repo, 'src/a.ts', '// old note\nexport const a = 1;\n')
+    loop(repo, 'commit', 'feat: a', 'src/a.ts')
+    evidence(repo, 1, '- regression: 116 passed of 116')
+    validation(repo, 1)
+    write(repo, 'src/a.ts', '// a clearer note\n\nexport const a = 1;\n')
+    loop(repo, 'commit', 'docs: nit', 'src/a.ts')
+    assert loop(repo, 'carry', CODE).stdout == 'carry 1, only // comment lines changed since\n'
+    write(repo, 'src/a.ts', '// a clearer note\n\n// @ts-expect-error\nexport const a = 1;\n')
+    loop(repo, 'commit', 'chore: directive', 'src/a.ts')
+    assert loop(repo, 'carry', CODE).stdout.startswith('validate: code changed')
+    write(repo, 'src/a.ts', '// a clearer note\n\nexport const a = 2;\n')
+    loop(repo, 'commit', 'fix: a', 'src/a.ts')
+    assert loop(repo, 'carry', CODE).stdout.startswith('validate: code changed')
+
+
 def test_carry_validates_without_a_regression_line(repo):
     attributed(repo)
     evidence(repo, 1, '- regression: 116 of 116 passed')

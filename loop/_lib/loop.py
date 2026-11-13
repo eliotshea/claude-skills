@@ -69,7 +69,8 @@ k ran the whole suite green and nothing outside docs, .claude and tests/validati
 since.
 carry prints `carry <n>` when the latest validation passed at the current last code commit and
 a round at that same code ran the regression suite green, so a final validation would only
-repeat it. Otherwise it prints `validate:` and why.
+repeat it. Whole `//` comment lines changed since then do not count as a change, so a review
+fix that only rewrote comments carries. Otherwise it prints `validate:` and why.
 inert lists every changed line under src since the base commit that is not a comment or blank,
 folding a deleted `export` declaration into one `deleted export <name>` line, then a count.
 baseline prints the jest and tsc gate lines of an evidence file whose Commit is the last code
@@ -523,15 +524,28 @@ def cmd_carry(a):
     header = read(path).splitlines()[:6]
     commit = next((l.split(':', 1)[1].strip() for l in header if l.startswith('Commit:')), '')
     green = green_regression(a.run_dir)
+    code = run('git', 'diff', '--quiet', commit, 'HEAD', '--', '.', ':!docs/tasks', ':!tests/validation',
+               check=False).returncode != 0
     if 'Verdict: PASS' not in header:
         print(f'validate: validation {n} did not pass')
-    elif run('git', 'diff', '--quiet', commit, 'HEAD', '--', '.', ':!docs/tasks', ':!tests/validation',
-             check=False).returncode != 0:
+    elif code and not comments_only(commit, ':!docs/tasks', ':!tests/validation'):
         print(f'validate: code changed since validation {n} at {commit}')
-    elif not green or changed(green[1], ':!tests/validation'):
+    elif not green or not comments_only(green[1], ':!tests/validation'):
         print(f'validate: no green regression run at {commit}')
     else:
-        print(f'carry {n}')
+        print(f'carry {n}' + (', only // comment lines changed since' if code else ''))
+
+
+LINE_COMMENT = re.compile(r'^\s*(//(?!.*(@ts-|eslint|prettier|istanbul|jest-))|$)')
+NOT_LINES = ('Binary files', 'rename ', 'old mode', 'new file', 'deleted file')
+
+
+def comments_only(since, *exclude):
+    """True when nothing outside docs changed since <since> but whole `//` comment lines."""
+    # shortcut: a `//` line inside a template literal or JSX text counts as a comment; parse the file if that ever bites.
+    lines = git('diff', '-U0', since, 'HEAD', '--', '.', *NOT_CODE, *exclude).splitlines()
+    return not any(l.startswith(NOT_LINES) or (l[:1] in ('+', '-') and not l.startswith(('+++ ', '--- '))
+                                               and not LINE_COMMENT.match(l[1:])) for l in lines)
 
 
 COMMENT = re.compile(r'^\s*(//|/\*|\*|\{/\*|$)')
