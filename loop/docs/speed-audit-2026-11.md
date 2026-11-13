@@ -149,7 +149,7 @@ spec PR gate to go (bet B6).
 Together: an estimated 15 to 20% fewer tokens per loop task, more on small tasks, and a plan
 that takes two sessions. That is real but short of "much faster". The rest is in the bets.
 
-### Bets: not implemented, each needs a live run to judge
+### Bets: decided on 2026-11-13 (section 6), each still needs a live run to judge
 
 | # | Change | Saving (estimate) | Quality risk | Evidence |
 |---|---|---|---|---|
@@ -231,3 +231,23 @@ owner, and two PRs need merging.
 6. `stats.md` leaves the orchestrator out, so S1, the largest saving, will not show in it.
    Summed agent context should fall by roughly a fix round on tasks S2 or S3 touch and stay
    flat otherwise.
+
+## 6. Decisions, 2026-11-13
+
+Settled with the owner in a grill after the audit, then implemented on this branch.
+
+| Item | Decision |
+|---|---|
+| B1 | Adopted. Validation round 1, the design review and the code review run at once; one fix answers all three files |
+| B2 | Adopted for cycles that change one file of the brief. Larger cycles keep the test-writer |
+| B3 | Not adopted. B1 removes the same round |
+| B4 | Adopted, narrowly: the runner reports a later round only when nothing failed and no view's result changed |
+| B5 | Adopted. `stats.md` has an orchestrator table. Also: `loop.py row` checks Blocking against the findings |
+| B6 | Not adopted. The spec PR stays, so planning is two sessions |
+| B7 | Adopted. Pictures go to `refs/loop-shots/<feature>`, which is kept until deleted by hand |
+| B8 | Task files are deleted at cleanup. Cleanup still runs once, at the end of the feature |
+| Vamp | One draft cleanup PR. issue-198's task 15 is abandoned, so it is cleaned as a closed feature. issue-110's drafts and reviews are deleted |
+
+Section 5's pass marks gain three: the build's row is followed by the runner and both
+reviews in one message; a one-file cycle shows one code-writer and no test-writer in
+`stats.md`; and no PNG appears in `git ls-files docs/tasks`.
