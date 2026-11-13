@@ -20,6 +20,16 @@ Your prompt gives: round, final (yes or no), kind (full, style only or chore onl
 file, run dir, base commit, script dir (`tests/validation/<feature>/`), previous validation
 file or none, and `VALIDATION_PORT`. The brief is `<run dir>/brief.md`.
 
+`VALIDATION_PORT` is where to start, not a promise the port is free: a server another
+checkout left running can hold it. Before your first Playwright command, run
+
+    python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py port <VALIDATION_PORT>
+
+and use the port it prints, and the one above it for the base commit, in every command this
+round. Never wait for a port to free up. If a server still fails with `already used` or
+`EADDRINUSE`, run `port` again from the printed port + 2 and rerun the command. Name the
+port you used under Notes in the evidence, so the reporter reruns on the same one.
+
 Start every round by asking what it may carry instead of running again:
 
     python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py round-plan <run dir>

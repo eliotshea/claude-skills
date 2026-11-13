@@ -17,6 +17,7 @@
     python3 <plugin root>/loop/_lib/loop.py inert <base commit>
     python3 <plugin root>/loop/_lib/loop.py baseline <feature> <base commit>
     python3 <plugin root>/loop/_lib/loop.py run <name> [--grep '<regex>'] [--tail <n>] [--count] -- <command>...
+    python3 <plugin root>/loop/_lib/loop.py port <start>
 
 Why a script. In a worktree-isolated session Claude Code refuses any Bash command that names
 git in a form it cannot verify: a `;` chain, a loop, a `$(...)`, a variable, a heredoc next to
@@ -71,11 +72,15 @@ run sends a command's output to a log file and prints only the lines matching --
 --tail of them, or their --count, then the exit code and the log's path. A run named
 `regression` also prints `- regression: <passed> passed of <total>` from Playwright's summary,
 skipped tests left out, for the evidence to paste verbatim.
+port prints the first port from <start>, stepping by 2, where nothing answers on it or on the
+one above it, so a validator never waits on a server another checkout left running.
 """
 import argparse
+import contextlib
 import glob
 import os
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -547,6 +552,22 @@ def cmd_run(a):
     print(f'exit {code}, log {path}')
 
 
+def answers(port):
+    """True when something accepts a connection on localhost:<port>, over IPv4 or IPv6."""
+    for host in ('127.0.0.1', '::1'):
+        with contextlib.suppress(OSError), socket.create_connection((host, port), timeout=0.2):
+            return True
+    return False
+
+
+def cmd_port(a):
+    for port in range(a.start, a.start + 100, 2):
+        if not answers(port) and not answers(port + 1):
+            print(port)
+            return
+    raise Fail(f'No free port pair in {a.start}..{a.start + 99}.')
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog='loop.py', description=__doc__.split('\n')[0])
     sub = p.add_subparsers(dest='sub', required=True)
@@ -594,6 +615,7 @@ def main(argv=None):
     s.add_argument('--grep')
     s.add_argument('--tail', type=int)
     s.add_argument('--count', action='store_true')
+    sub.add_parser('port').add_argument('start', type=int)
     argv = sys.argv[1:] if argv is None else argv
     split = argv.index('--') if '--' in argv else len(argv)
     a = p.parse_args(argv[:split])

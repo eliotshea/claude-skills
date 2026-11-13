@@ -49,9 +49,10 @@ handoff-format.md's "Commands" gives, and never `$` followed by a digit in this 
    missing. `git fetch origin`. If `git status --porcelain` shows changes while a task branch
    in progress ("Find where you are", step 1) is checked out, leave them for Resuming. Any
    other changes: stop and ask the human about them before switching any branch.
-4. **Validation port.** 3100, or the next even port above it if `lsof -i :3100 -i :3101`
-   shows another loop using either. Every validator gets this port, and its screenshots of
-   the base commit use the one above it.
+4. **Validation port.** `loop.py port 3100` prints 3100, or the next even port above it
+   where nothing answers on it or the one above. Every validator gets this port, and its
+   screenshots of the base commit use the one above it. A validator that finds it taken
+   later moves up by itself with the same command, and never waits for it.
 5. **Attribution.** Your own instructions give attribution lines for commit messages and for
    pull request bodies. Store them, verbatim, in the worktree:
 

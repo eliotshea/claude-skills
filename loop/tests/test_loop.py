@@ -513,3 +513,14 @@ def test_baseline_copies_the_previous_tasks_gates_at_the_same_code(repo):
     write(repo, 'src/a.ts', 'export const a = 2;\n')
     later = loop(repo, 'commit', 'feat: other task', 'src/a.ts').stdout.split()[0]
     assert loop(repo, 'baseline', FEATURE, later).stdout == 'run\n'
+
+
+def test_port_skips_a_pair_with_a_listener(tmp_path):
+    import socket
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        s.listen()
+        taken = s.getsockname()[1]
+        start = taken - taken % 2  # the listener holds start or start + 1
+        out = int(sh(str(tmp_path), sys.executable, LOOP, 'port', str(start)))
+    assert out != start and (out - start) % 2 == 0
