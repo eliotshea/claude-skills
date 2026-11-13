@@ -41,7 +41,7 @@ too.
 | `docs/tasks/atlas.md`, outside the run dir | task-scout, through `atlas.py merge`, in the survey's commit; pruned through `atlas.py prune` by the implementer and the cleanup | one, shared by every feature |
 | `brief.md` | brief-writer, from `survey.md` | |
 | `evidence-<n>.md` | task-validator, in the same commit as its scripts | n is its validation's number |
-| `validation-<n>.md` | validation-reporter, from `evidence-<n>.md` | n counts validations across the whole task: 1, 2, 3, … whichever stage each belongs to |
+| `validation-<n>.md` | validation-reporter, from `evidence-<n>.md`; the runner itself on a later round where nothing failed and no picture changed | n counts validations across the whole task: 1, 2, 3, … whichever stage each belongs to |
 | `architecture-<n>.md` | architect-reviewer | n is the architecture round |
 | `review-1.md` | code-reviewer | code review runs once |
 | `feedback-<k>.md` | orchestrator, from the human's pull request feedback | k counts feedback rounds |

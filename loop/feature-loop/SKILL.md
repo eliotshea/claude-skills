@@ -307,6 +307,7 @@ After each agent returns:
 | Implementer's `Blocked:` is not `none` | Escalate. |
 | The build's implementer returned | validate, architecture round 1 and code review, at once. Style only or chore only: validate and code review |
 | Any other implementer returned | `loop.py carry`: carried, or validate |
+| Runner wrote the evidence, and its message has a `Validation:` line | Log a `validation <n> report` row for `task-validator` with `--check` on that file, and route on its header. No reporter |
 | Runner wrote the evidence | report, same round |
 | Validation round 1's report, architecture round 1 or the review returned, and another of those three that was dispatched has no row yet | Wait for it while it runs. After a resume, dispatch it. |
 | Validation `Repeat:` names an id that no `grant` row for this stage names | Escalate. A fix did not hold. |
