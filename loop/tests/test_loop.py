@@ -314,15 +314,26 @@ def test_cleanup_keeps_logs_and_folds_stats(repo):
     write(repo, f'{f}/runs/01/log.md', 'log 1\n')
     write(repo, f'{f}/runs/01/brief.md', 'brief\n')
     write(repo, f'{f}/runs/01/stats.md', 'header\n| 01 | 9 | 40k | 200k | 0 | 30 | 50 |\n')
+    write(repo, f'{f}/runs/01/review-1.md', report('Review', 1, '### R1-1 · bug\nStatus: fixed\nFix: abc1234 clamps the end of the range\n'
+                                                           '### R1-2 · nit\nStatus: declined\nFix: Declined: out of the diff surface\n'))
     write(repo, f'{f}/runs/02/log.md', 'log 2\n')
     write(repo, f'{f}/runs/02/shots/before/x.png', 'png')
+    for kept in ('plan-log.md', 'DECISIONS.md', '00-overview.md'):
+        write(repo, f'{f}/{kept}', 'kept\n')
+    for gone in ('PLAN.md', 'EVALUATION.md', 'plans/PLAN-A.md', 'readiness/01.md', 'grill/spec.md'):
+        write(repo, f'{f}/{gone}', 'gone\n')
     loop(repo, 'commit', 'docs: runs', f)
     out = loop(repo, 'cleanup', f).stdout
-    assert 'removed 3 run files, folded 1 stats totals' in out
+    assert 'removed 9 run and plan files, folded 1 stats totals, kept 1 fixed findings' in out
     assert 'no stats total for task 02' in out
     staged = git(repo, 'diff', '--cached', '--name-status').splitlines()
     assert sorted(staged) == sorted([f'D\t{f}/runs/01/brief.md', f'D\t{f}/runs/01/stats.md',
-                                     f'A\t{f}/runs/stats.md', f'D\t{f}/runs/02/shots/before/x.png'])
+                                     f'D\t{f}/runs/01/review-1.md', f'A\t{f}/runs/findings.md',
+                                     f'A\t{f}/runs/stats.md', f'D\t{f}/runs/02/shots/before/x.png',
+                                     *(f'D\t{f}/{gone}' for gone in ('PLAN.md', 'EVALUATION.md', 'plans/PLAN-A.md',
+                                                                    'readiness/01.md', 'grill/spec.md'))])
+    kept = open(os.path.join(repo, f'{f}/runs/findings.md')).read()
+    assert kept.endswith('|---|---|---|\n| 01 | R1-1 · bug | abc1234 clamps the end of the range |\n')
     stats = open(os.path.join(repo, f'{f}/runs/stats.md')).read()
     assert stats.startswith(f'# {FEATURE}: task sizes\n')
     assert stats.endswith('|---|---|---|---|---|---|---|\n| 01 | 9 | 40k | 200k | 0 | 30 | 50 |\n')

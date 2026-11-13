@@ -426,9 +426,8 @@ current last code commit. Get the URL with `gh pr view <number> --json url -q .u
 
 Once every task is complete and merged, the run files have done their job. One last pull
 request into the feature branch removes them, so the feature does not reach `master` carrying
-hundreds of handoff files. It keeps each task's `log.md`, the record the tasks' sizes are
-compared from, and folds each `stats.md` total into one table. Everything else stays in git
-history at the commit the cleanup starts from.
+hundreds of handoff files. Everything it removes stays in git history at the commit the
+cleanup starts from.
 
 1. **Once only.** Look for a cleanup pull request already made:
 
@@ -443,23 +442,25 @@ history at the commit the cleanup starts from.
 
    `-B` rebuilds the branch if a cut-off cleanup left one behind. Note the starting commit,
    `git rev-parse --short HEAD`, for the body.
-3. **Condense.** `loop.py cleanup <feature>` removes every run file but each `log.md`, prunes
-   the atlas of gone and stale entries, folds every `runs/<NN>/stats.md` total into
-   `runs/stats.md`, and stages it all. When it prints `no stats total for task <NN>…`, run
-   `run-stats.py <feature> <NN>` for each, add its last line to the table in `runs/stats.md`
-   and stage it. A task it still cannot measure is named in the body as missing from the totals.
+3. **Condense.** `loop.py cleanup <feature>` removes every run file but each `log.md`, and the
+   plan's drafts, evaluation, `PLAN.md`, readiness and grill files. It prunes the atlas of gone
+   and stale entries, folds every `runs/<NN>/stats.md` total into `runs/stats.md` and every
+   finding that led to a fix into `runs/findings.md`, and stages it all. When it prints
+   `no stats total for task <NN>…`, run `run-stats.py <feature> <NN>` for each, add its last
+   line to the table in `runs/stats.md` and stage it. A task it still cannot measure is named
+   in the body as missing from the totals.
 
-   It leaves `runs/<NN>/log.md` for every task and `runs/stats.md`, and nothing else under
-   `runs/`. The shared atlas keeps only its fresh entries, for the next feature's scouts. The
-   task files, `00-overview.md`, `PROGRESS.md`, the plan's files and the validation scripts in
-   `tests/validation/<feature>/` stay.
+   What stays is what a later feature or a tuning pass reads: each `log.md`, `runs/stats.md`,
+   `runs/findings.md`, `plan-log.md`, `DECISIONS.md`, `00-overview.md`, the task files,
+   `PROGRESS.md`, the atlas's fresh entries and the validation scripts in
+   `tests/validation/<feature>/`.
 4. **Commit and push.** `loop.py commit 'docs(<feature>): clean up loop run files'` commits
    what the cleanup staged. `git push --force-with-lease -u origin <feature-branch>-cleanup`.
 5. **Open.** Write the body to a file outside the repository, `mktemp`, since the run
    directories are gone: one line saying this removes the loop's run files for `<feature>`;
    the counts of files removed and kept, from `git diff --shortstat HEAD^ HEAD`; that each
-   task's `log.md` stays for comparing task sizes and `runs/stats.md` holds every task's
-   total; that every removed file is still at `<starting commit>`, as
+   task's `log.md` stays, `runs/stats.md` holds every task's total and `runs/findings.md` every
+   finding that was fixed; that every removed file is still at `<starting commit>`, as
    `git show <starting commit>:docs/tasks/<feature>/runs/<NN>/<file>`; and the pull request
    attribution lines. Then
 

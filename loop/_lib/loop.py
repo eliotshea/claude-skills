@@ -50,8 +50,9 @@ row appends the next whole-numbered row to `<run dir>/log.md` and commits it, wi
 paths, as `docs(<feature>): loop task <NN> row <#>`. --check first reads that file's header,
 fails without writing a row when it is missing or invalid, and prints it to route on.
 pr-body writes `runs/<NN>/pr-body.md` from the run files without anyone reading them.
-cleanup removes every run file but each `log.md`, prunes the atlas, folds every `stats.md`
-total into `runs/stats.md`, and stages it all. It commits nothing. It names every task with a
+cleanup removes every run file but each `log.md`, and the plan's drafts, evaluation, PLAN.md,
+readiness and grill files, prunes the atlas, folds every `stats.md` total into `runs/stats.md`
+and every finding that led to a fix into `runs/findings.md`, and stages it all. It commits nothing. It names every task with a
 log but no stats total, so the feature's totals never come out short without saying so.
 section prints the `## ` sections with these exact headings, each under its heading line, or
 without it with --bare. --subheads keeps only their `### ` lines, --preamble adds what comes
@@ -96,6 +97,8 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ATLAS_PY = os.path.join(HERE, '..', 'feature-loop', 'atlas.py')
 # The project's files the loop's agents run from the worktree. `start` syncs them from master.
+# What planning leaves that nothing reads once the tasks are built. `cleanup` removes them.
+PLAN_DRAFTS = ['plans', 'readiness', 'grill', 'EVALUATION.md', 'PLAN.md', 'plan-pr-body.md']
 TOOLING = ['tests/validation/README.md', 'playwright.validation.config.ts']
 NOT_CODE = [':!docs', ':!.claude']
 OPEN = re.compile(r'^Status: (open|reopened)$')
@@ -384,7 +387,15 @@ def cmd_cleanup(a):
     folded = {t.split('|')[1].strip() for t in totals if t.startswith('|')}
     missing = sorted(os.path.basename(os.path.dirname(p)) for p in glob.glob(f'{f}/runs/*/log.md')
                      if os.path.basename(os.path.dirname(p)) not in folded)
+    # Every finding that led to a fix, one line each: what the gates changed, for tuning the loop.
+    fixed = [f'| {os.path.basename(d.rstrip("/"))} | {h[4:]} | {fields["Fix"]} |'
+             for d in sorted(glob.glob(f'{f}/runs/*/'))
+             for p in dict.fromkeys([latest(d, 'validation'), latest(d, 'architecture'), f'{d}review-1.md',
+                                     *sorted(glob.glob(f'{d}feedback-*.md'))])
+             if p and os.path.exists(p)
+             for h, fields in findings(p) if fields.get('Fix') and not fields['Fix'].startswith('Declined')]
     doomed = [p for p in git('ls-files', '--', f'{f}/runs').splitlines() if not p.endswith('/log.md')]
+    doomed += git('ls-files', '--', *(f'{f}/{p}' for p in PLAN_DRAFTS)).splitlines()
     if doomed:
         git('rm', '-q', '--', *doomed)
     run(sys.executable, ATLAS_PY, 'prune', 'HEAD', '--stale')
@@ -398,7 +409,11 @@ def cmd_cleanup(a):
             '| Task | Runs | Largest context | Total context | Over 50k | Active min | Wall min |',
             '|---|---|---|---|---|---|---|', *totals]) + '\n')
         git('add', '--', f'{f}/runs/stats.md')
-    print(f'removed {len(doomed)} run files, folded {len(totals)} stats totals')
+    if fixed:
+        write(f'{f}/runs/findings.md', '\n'.join([
+            f'# {name}: findings that were fixed', '', '| Task | Finding | Fix |', '|---|---|---|', *fixed]) + '\n')
+        git('add', '--', f'{f}/runs/findings.md')
+    print(f'removed {len(doomed)} run and plan files, folded {len(totals)} stats totals, kept {len(fixed)} fixed findings')
     if missing:
         print(f'no stats total for task {", ".join(missing)}: fold it in by hand from run-stats.py')
 

@@ -49,7 +49,8 @@ too.
 | `stats.md` | orchestrator, from `run-stats.py`, with the pull request or a `stopped` row | |
 
 When every task is merged, the orchestrator's cleanup pull request removes all of these but
-each task's `log.md`, and folds each `stats.md`'s last line into one `runs/stats.md`. So
+each task's `log.md`, and folds each `stats.md`'s last line into one `runs/stats.md` and each
+fixed finding into one line of `runs/findings.md`. So
 nothing a later task needs may live only in a run directory.
 
 The implementer writes no file of its own. It edits the `Status:` and `Fix:` lines of the
