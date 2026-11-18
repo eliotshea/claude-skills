@@ -174,7 +174,7 @@ command and `--allow-empty`, never a plain `git commit`.
 | `declined` | implementer | `Fix:` starts `Declined:` and quotes the task file, DECISIONS.md, overview rule, Out of scope text or observed app behaviour the finding conflicts with. | no, until ruled |
 | `accepted` | the ruling round | `Ruling:` confirms the fix, agrees with the decline, or records that this round's evidence no longer shows the problem. Closed. | no |
 | `reopened` | the ruling round | `Ruling:` says what is still wrong. | yes |
-| `disputed` | the ruling round | Implementer and checker still disagree after their last exchange. Goes to the human in the pull request. | no |
+| `disputed` | the ruling round | Implementer and checker still disagree after their last exchange. Goes to the human at the feature's review. | no |
 
 A finding whose `Ruling:` starts `Human:` was settled by the human. No agent changes its
 status again. If its problem shows up again, the checker says so under Observations.
@@ -189,7 +189,7 @@ Who rules, by prefix:
 - **`A`**: the next architecture round. A fix is `accepted` or `reopened`. A decline is
   `accepted` or `disputed`. A finding the refactor left unaddressed is `reopened`.
 - **`R` and `U`**: nobody. `fixed` stands, since the validation after it reruns the
-  whole contract without ruling on these ids. `declined` goes to the human in the pull request.
+  whole contract without ruling on these ids. `declined` goes to the human at the feature's review.
 
 ## For the PR
 
@@ -227,8 +227,7 @@ empty when that block has not arrived. **Never end your turn to wait for a `<usa
 and never go back to fill one in: it changes nothing about where the run goes next, and
 `stats.md` reads every agent's numbers from the transcripts at the pull request. A row the
 orchestrator writes for its own step has `orchestrator` as its agent and one of these stages:
-`feedback`, `ruling`, `grant`, `escalated`, `stopped`, `validation carried`, `pull request`,
-`pull request updated`.
+`feedback`, `ruling`, `grant`, `escalated`, `stopped`, `validation carried`, `pull request`.
 
 Row 0 is the file's creation, before any agent runs. Each row is its own commit,
 `docs(<feature>): loop task <NN> row <#>`. It carries any file the orchestrator changed for that step. The orchestrator's

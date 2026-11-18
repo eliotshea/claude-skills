@@ -1,6 +1,6 @@
 ---
 name: feature-loop
-description: Use when the user runs /feature-loop to deliver a planned feature under docs/tasks/ one task at a time, each ending in a validated pull request into the feature branch.
+description: Use when the user runs /feature-loop to deliver a planned feature under docs/tasks/ one task at a time, each ending in a validated pull request the loop merges into the feature branch, for one review of the whole feature at the end.
 disable-model-invocation: true
 argument-hint: <docs/tasks/feature-dir> [task number]
 ---
@@ -9,7 +9,8 @@ argument-hint: <docs/tasks/feature-dir> [task number]
 
 You are the orchestrator. You deliver the tasks of one planned feature, one at a time. Each
 task passes through a fixed loop of subagents and ends in a pull request into the feature
-branch. Then you stop until the human tells you it is merged.
+branch, which you merge yourself before starting the next task. The human reviews once, on
+the feature branch, when every task is in.
 
 You route. The subagents read the code, write it, check it and judge it. Your context has to
 last the whole feature, so what you hand an agent is paths, round numbers and commits, and
@@ -70,8 +71,12 @@ handoff-format.md's "Commands" gives, and never `$` followed by a digit in this 
        gh label create cleanup --color C5DEF5 --description "Removes feature-loop run files" --force
        gh pr list --base master --head <feature-branch> --state open --json number -q '.[].number'
 
-   If that finds a pull request, `gh pr edit <number> --add-label feature-branch`. If it finds
-   none, go on: the human opens it when they choose.
+   If that finds a pull request, label it:
+   `gh api repos/{owner}/{repo}/issues/<number>/labels -f 'labels[]=feature-branch'`. If it
+   finds none, open it as a draft, because it is where the human reviews the feature:
+   `gh pr create --draft --base master --head <feature-branch> --title "<feature>" --label
+   feature-branch --body "Feature branch for <feature>. Built with /feature-loop."`. Keep its
+   number.
 
 ## Find where you are
 
@@ -86,7 +91,7 @@ handoff-format.md's "Commands" gives, and never `$` followed by a digit in this 
    `git pull --ff-only origin <feature-branch>`. Take the task the second argument names.
    Without one, take the first task, in the dependency order of `00-overview.md`, whose file
    has no `Status: complete` line while all its dependencies have one. When every task is
-   complete, go to "Cleanup".
+   complete, go to "The review".
 3. **Start it.** Name the task branch like this feature's earlier task branches:
    `gh pr list --base <feature-branch> --state all --json headRefName -q '.[].headRefName'`.
    If there are none, use `<feature-branch>-task-<NN>`. Then:
@@ -115,9 +120,9 @@ List what agents did after the last row, oldest first, and whether anything is u
 completion notification yet, it is still running: whatever it has left in the tree is work in
 progress, not a cut-off step. Wait for its notification before anything below.
 
-- **Nothing, and the last row is `pull request` or `pull request updated`:** tell the human the
-  pull request (number in that row) is waiting on them. Handle their reply as in "When the
-  human replies".
+- **Nothing, and the last row is `pull request`:** the merge was cut off.
+  `gh pr view <number> --json state -q .state` on the number in that row: `OPEN`, merge it as
+  in step 5 of "The pull request"; `MERGED`, go to "Find where you are", step 2.
 - **Nothing, and the last row is `escalated` or `stopped`:** tell the human what that row says
   and wait for their instruction.
 - **Nothing, and any other row:** route on the last row again, without logging it again. Every
@@ -147,21 +152,23 @@ digraph feature_loop {
   "architect round 2+"; refactor;
   "human feedback" [shape=ellipse];
   "all clean?" [shape=diamond]; "PASS?" [shape=diamond];
-  "open or update PR, stop" [shape=doublecircle];
+  "open PR, merge, next task" [shape=doublecircle];
 
   survey -> brief -> build -> "validate, design and code review" -> "all clean?";
-  "all clean?" -> "open or update PR, stop" [label="PASS, CLEAN, APPROVED"];
+  "all clean?" -> "open PR, merge, next task" [label="PASS, CLEAN, APPROVED"];
   "all clean?" -> fix [label="any open finding"];
   "all clean?" -> validate [label="tooling findings only"];
   fix -> validate -> "PASS?";
   "PASS?" -> fix [label="BLOCKED"];
   "PASS?" -> validate [label="BLOCKED, tooling only"];
   "PASS?" -> "architect round 2+" [label="PASS, design changes were requested"];
-  "PASS?" -> "open or update PR, stop" [label="PASS"];
-  "architect round 2+" -> "open or update PR, stop" [label="APPROVED"];
+  "PASS?" -> "open PR, merge, next task" [label="PASS"];
+  "architect round 2+" -> "open PR, merge, next task" [label="APPROVED"];
   "architect round 2+" -> refactor [label="CHANGES REQUESTED, granted"];
   refactor -> validate;
-  "open or update PR, stop" -> "human feedback" [style=dashed];
+  "the review, once every task is merged" [shape=ellipse];
+  "open PR, merge, next task" -> "the review, once every task is merged" [style=dashed];
+  "the review, once every task is merged" -> "human feedback" [style=dashed];
   "human feedback" -> fix;
 }
 ```
@@ -178,8 +185,8 @@ A **stage** is one piece of implementation work and the validation rounds that f
 There are three kinds: the build, a refactor and a feedback fix. Each stage allows 3 fix
 rounds, counted from the stage's start or from the latest `grant` row for that stage.
 
-Every validation runs the whole contract, so any that passes can open or update the pull
-request, and `Final:` is always `yes`.
+Every validation runs the whole contract, so any that passes can open the pull request, and
+`Final:` is always `yes`.
 
 **A passing round carries.** Before every validation but the build's first, run
 
@@ -315,9 +322,8 @@ After each agent returns:
 | Validation BLOCKED, `loop.py findings <file> --label tooling --count` equals Blocking, and neither `review-1.md` nor `architecture-1.md` has open ids | validate, no fix |
 | Validation BLOCKED, or `review-1.md` or `architecture-1.md` has open ids | fix, with the open ids of every one of the three files |
 | Validation PASS or `validation carried`, and the latest architecture file is CHANGES REQUESTED | architecture, with round = the latest architecture round + 1 |
-| Validation PASS or `validation carried`, and `log.md` has a `pull request` row | update the pull request |
-| Validation PASS or `validation carried` | open the pull request |
-| Architecture round 2 or later APPROVED | as on a PASS: update or open the pull request |
+| Validation PASS or `validation carried` | the pull request |
+| Architecture round 2 or later APPROVED | the pull request |
 | Architecture round 2 or later CHANGES REQUESTED, and a `grant: architecture round <this round>` row exists | refactor |
 | Architecture round 2 or later CHANGES REQUESTED | Escalate. |
 
@@ -349,9 +355,8 @@ Applying the answer:
   and set its verdict to match. Log a `ruling` row, committing the edit with it, then route on the
   corrected header. No agent reopens a finding whose ruling starts `Human:`.
 - **Stop.** Write `stats.md` as in step 1 of the pull request, log a `stopped` row committing
-  it, and stop. End with the same fenced block as step 5
-  of the pull request, naming this task instead of the next one, so the human can pick the
-  loop up where it stopped.
+  it, and stop. End with `/feature-loop docs/tasks/<feature> <NN>`, naming this task, alone in
+  a fenced block, so the human can pick the loop up where it stopped.
 - **Anything else.** Do it if an agent can: dispatch that agent with the human's words as an
   extra prompt line. Log it, then route on what it returns.
 
@@ -375,7 +380,8 @@ Applying the answer:
 2. **Push.** If `pr-body.md` or `stats.md` changed, commit them:
    `loop.py commit 'docs(<feature>): loop task <NN> pr body' <run dir>/pr-body.md <run dir>/stats.md`.
    `git status --porcelain` is now empty. Run `git push -u origin <task-branch>`.
-3. **Open.** If `gh pr view <task-branch> --json number` already finds a pull request, use it.
+3. **Open.** If `gh pr list --head <task-branch> --state open --json number` already finds a
+   pull request, use it.
    Otherwise `gh pr create --base <feature-branch> --head <task-branch> --title "<the brief's
    PR title>" --body-file <run dir>/pr-body.md`. Always pass `--base`: the repository default
    is `master`.
@@ -389,40 +395,39 @@ Applying the answer:
    The last code commit is `git log -1 --format=%h -- . ':!docs/tasks' ':!tests/validation'`.
    If either mark changed, commit them with `loop.py commit 'docs(<feature>): loop task <NN> marks'`
    and the two files. Push.
-5. **Stop.** Log a `pull request` row with the number, commit, push. Tell the human: the pull
-   request URL; the number of manual checks waiting for them
-   (`grep -c -- '- \[ \]' <latest validation file>`); the number of entries under Disputed in
-   `pr-body.md`; the largest context and its agent, if it is over 50k, from the last line of
-   `stats.md` (`tail -1`); and to
-   reply `merged` once it is in, or with feedback.
+5. **Merge.** Log a `pull request` row with the number, and push. Post the body on the
+   feature branch's pull request into `master` (Setup, step 6), where the human reviews:
 
-   Then end the message with the command that starts the next task, alone in a fenced code
-   block, because a fenced block is what gives the human a copy button on the phone and in the
-   app:
+       gh api repos/{owner}/{repo}/issues/<feature pull request number>/comments -F body=@<run dir>/pr-body.md
 
-       ```
-       /feature-loop docs/tasks/<feature> <NN of the next task>
-       ```
+   Then merge the task's pull request yourself:
 
-   Nothing follows it. The next task is the first one in `00-overview.md`'s dependency order
-   whose file has no `Status: complete` line, which is never this one: step 4 just marked it.
-   When every task is marked, this was the final task: say that once it is merged the loop
-   opens the cleanup pull request, and the command is `/feature-loop docs/tasks/<feature>`
-   with no task number.
+       gh api -X PUT repos/{owner}/{repo}/pulls/<number>/merge -f merge_method=merge
 
-   Name the number rather than leaving the loop to pick. The human pastes this into a session
-   that does not exist yet, hours or days later, and a command that says which task it starts
-   is one they can check against the pull request they just merged.
+   If it refuses because checks are still running, `gh pr checks <number> --watch`, then merge
+   again. Any other refusal: log a `stopped` row with its message and tell the human.
 
-**Updating** an open pull request, after a feedback fix or a ruling, reuses these steps: steps
-1 and 2, then `gh pr edit <number> --body-file <run dir>/pr-body.md`, then step 4 with the
-current last code commit. Get the URL with `gh pr view <number> --json url -q .url`. Log a
-`pull request updated` row and stop as in step 5.
+   No human reads a task's pull request before it merges. Its validation and both reviews are
+   its gate, and what is left for a human (manual checks, disputed findings, the before and
+   after pictures) is in that comment. Once it is merged, go to "Find where you are", step 2.
+
+## The review
+
+When every task is complete and merged, the human reviews the feature once.
+
+1. Run step 1 of "Cleanup". A `MERGED` cleanup pull request means the review is over and the
+   feature is done: say so and stop.
+2. Otherwise stop and tell the human: the feature pull request's URL
+   (`gh pr list --base master --head <feature-branch> --json url -q '.[].url'`); that each
+   task's result, manual checks, disputed findings and pictures are its comments; the manual
+   checks waiting, from `grep -c -- '- \[ \]' docs/tasks/<feature>/runs/*/pr-body.md`; any task
+   whose largest context was over 50k, from the last line of each `stats.md`; and to reply
+   with feedback, or `clean up` when the feature is right. Print no command.
 
 ## Cleanup
 
-Once every task is complete and merged, the run files have done their job. One last pull
-request into the feature branch removes them, so the feature does not reach `master` carrying
+Once the human has reviewed the feature and replied `clean up`, the run files have done
+their job. One last pull request into the feature branch removes them, so the feature does not reach `master` carrying
 hundreds of handoff files. Everything it removes stays in git history at the commit the
 cleanup starts from.
 
@@ -430,9 +435,8 @@ cleanup starts from.
 
        gh pr list --base <feature-branch> --label cleanup --state all --json number,state,url
 
-   `MERGED`: say the feature is done and stop. `OPEN`: give the human its URL, ask them to
-   reply `merged` once it is in, and stop. `CLOSED`, with none open or merged: ask the human
-   whether to open another. None: go on.
+   `MERGED`: say the feature is done and stop. `OPEN`: merge it as in step 6. `CLOSED`, with
+   none open or merged: ask the human whether to open another. None: go on.
 2. **Branch.** From the feature branch, freshly pulled in "Find where you are", step 2:
 
        git checkout -B <feature-branch>-cleanup origin/<feature-branch>
@@ -463,9 +467,8 @@ cleanup starts from.
 
        gh pr create --base <feature-branch> --head <feature-branch>-cleanup --title "docs(<feature>): clean up loop run files" --label cleanup --body-file <that file>
 
-6. **Stop.** Give the human the URL and ask them to reply `merged` once it is in. When they
-   do, confirm it as in "When the human replies", then say the feature is done. Print no
-   command.
+6. **Merge.** Merge it as step 5 of "The pull request" merges a task's. Then say the feature
+   is done and its pull request into `master` is the human's to merge. Print no command.
 
 The cleanup gets no log row: it belongs to no task, and each `log.md` ends where its task did.
 
@@ -503,23 +506,23 @@ task whose scout could not fit the ground it had to cover.
 
 ## When the human replies
 
-- **`merged`.** Confirm with `gh pr view <number> --json state -q .state` that it says
-  `MERGED`, then go to "Find where you are", step 2. For the cleanup pull request, say the
-  feature is done instead.
-- **Feedback on the pull request.** Write `runs/<NN>/feedback-<k>.md`, where k counts feedback
-  rounds on this task:
+- **`clean up`,** at the review. Go to "Cleanup".
+- **Feedback,** at the review. Take the points one task at a time: `PROGRESS.md` says which
+  task built what, and a point you cannot place is a question for the human. For a task,
+  `git checkout -b <its task branch>-feedback-<k> origin/<feature-branch>`, where k counts
+  feedback rounds on that task, and write `runs/<NN>/feedback-<k>.md`:
   - The header comes from handoff-format.md, with Verdict FINDINGS and Blocking set to the
     number of points.
   - Each point becomes a finding `### U<k>-<j> · feedback` with `Status: open`. Evidence is the
-    human's words, verbatim. Expected is `Asked for by the human on PR #<number>`. Repro is
+    human's words, verbatim. Expected is `Asked for by the human at the review`. Repro is
     `none given`. Fix and Ruling are empty.
   - `## For the PR` is one line saying how many points this round raised.
 
-  Log a `feedback` row, committing the file with it, and start a feedback fix: a fix with this
-  file, then validation.
-- **A ruling on disputed or declined findings in the pull request.** Record it as in "A ruling
-  on a finding" under Escalating, without routing on the header. If the ruling asks for a
-  change, write that change up as feedback. Otherwise update the pull request.
+  Log a `feedback` row in that task's `log.md`, committing the file with it, and start a
+  feedback fix: a fix with this file, then validation, then the pull request, titled as the
+  task's was with `, feedback <k>` after it. When it is merged, go to "The review".
+- **A ruling on a disputed or declined finding.** If it asks for a change, it is feedback.
+  Otherwise there is nothing to do: the finding stands as the feature pull request shows it.
 - **Anything else.** Answer it. The loop does not advance.
 
 ## What you read
@@ -547,5 +550,6 @@ header, using Edit on those lines.
 | "I'll chain these few commands in one call" | One plain command per call, or a `loop.py` subcommand. A refused chain is a retry, and a variable or `$(…)` never survives the guard. |
 | "These calls are independent, I'll batch them" | Not a row and the dispatch it routes to. The dispatch waits for the row's commit. |
 | "The implementer handed back `(waiting)`, I'll dispatch it again" | It is still running until its completion notification. Wait for that, then ask it with SendMessage. |
-| "The human is away, I'll start the next task" | Stop. The next task branches from a feature branch that includes this one. |
+| "The pull request is open, I'll wait for the human to merge it" | Merge it and start the next task. The human reviews the feature branch, once, at the end. |
+| "This task has a disputed finding, I'll stop for a ruling" | Merge and go on. It is in the task's comment on the feature pull request, for the review. |
 | "The finding contradicts the task file, I'll skip it" | The implementer declines it, quoting the task file. A V or A decline is ruled on by the next round of its stage. An R or U decline goes to the human in the pull request. |

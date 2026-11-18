@@ -322,7 +322,8 @@ When every task is READY:
 3. Log `plan PR | router | plan PR #<n>`, commit, push. Stop: the PR URL, the task count, the
    largest scout estimate, and that merging it is the handoff to the loop.
 
-**Updating** after feedback: steps 1 and 2 with `gh pr edit <n> --body-file ...`, then a
+**Updating** after feedback: steps 1 and 2 with `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F
+body=@docs/tasks/<feature>/plan-pr-body.md`, then a
 `plan PR updated` row.
 
 ## The plan gate
