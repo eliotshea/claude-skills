@@ -53,8 +53,9 @@ pr-body writes `runs/<NN>/pr-body.md` from the run files without anyone reading 
 task's pictures never reach a branch: it commits `runs/<NN>/shots` to
 `refs/loop-shots/<feature>`, pushes that ref and links the pictures at that commit.
 cleanup removes every run file but each `log.md`, the task files, and the plan's drafts,
-evaluation, PLAN.md, readiness and grill files, prunes the atlas, folds every `stats.md` total into `runs/stats.md`
-and every finding that led to a fix into `runs/findings.md`, and stages it all. It commits nothing. It names every task with a
+evaluation, PLAN.md, readiness and grill files, prunes the atlas, folds every `stats.md` total into `runs/stats.md`,
+every finding that led to a fix into `runs/findings.md` and every `- ` line of a task's
+`snags.md` into `runs/snags.md`, and stages it all. It commits nothing. It names every task with a
 log but no stats total, so the feature's totals never come out short without saying so.
 section prints the `## ` sections with these exact headings, each under its heading line, or
 without it with --bare. --subheads keeps only their `### ` lines, --preamble adds what comes
@@ -415,7 +416,7 @@ def rows(path):
 
 def cmd_cleanup(a):
     name, f = feature_name(a.feature), feature_dir(a.feature)
-    kept = (f'{f}/runs/stats.md', f'{f}/runs/findings.md')
+    kept = (f'{f}/runs/stats.md', f'{f}/runs/findings.md', f'{f}/runs/snags.md')
     totals = [read(s).rstrip('\n').splitlines()[-1] for s in sorted(glob.glob(f'{f}/runs/*/stats.md'))
               if read(s).strip()]
     folded = {t.split('|')[1].strip() for t in totals if t.startswith('|')}
@@ -432,6 +433,11 @@ def cmd_cleanup(a):
     # that task again: its new total replaces the old one, and a finding is kept once.
     totals = list({t.split('|')[1].strip() if '|' in t else t: t for t in rows(kept[0]) + totals}.values())
     fixed = list(dict.fromkeys(rows(kept[1]) + fixed))
+    # What cost each task a retry or a round without being about its code, for tuning the loop.
+    snags = [f'| {os.path.basename(os.path.dirname(p))} | {l[2:].strip()} |'
+             for p in sorted(glob.glob(f'{f}/runs/*/snags.md'))
+             for l in read(p).splitlines() if l.startswith('- ')]
+    snags = list(dict.fromkeys(rows(kept[2]) + snags))
     doomed = [p for p in git('ls-files', '--', f'{f}/runs').splitlines()
               if not p.endswith('/log.md') and p not in kept]
     doomed += git('ls-files', '--', *(f'{f}/{p}' for p in PLAN_DRAFTS)).splitlines()
@@ -453,7 +459,11 @@ def cmd_cleanup(a):
         write(f'{f}/runs/findings.md', '\n'.join([
             f'# {name}: findings that were fixed', '', '| Task | Finding | Fix |', '|---|---|---|', *fixed]) + '\n')
         git('add', '--', f'{f}/runs/findings.md')
-    print(f'removed {len(doomed)} run and plan files, folded {len(totals)} stats totals, kept {len(fixed)} fixed findings')
+    if snags:
+        write(f'{f}/runs/snags.md', '\n'.join([
+            f'# {name}: snags', '', '| Task | Snag |', '|---|---|', *snags]) + '\n')
+        git('add', '--', f'{f}/runs/snags.md')
+    print(f'removed {len(doomed)} run and plan files, folded {len(totals)} stats totals, kept {len(fixed)} fixed findings, {len(snags)} snags')
     if missing:
         print(f'no stats total for task {", ".join(missing)}: fold it in by hand from run-stats.py')
 

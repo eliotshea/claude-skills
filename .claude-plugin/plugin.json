@@ -25,6 +25,7 @@
     "./loop/agents/plan-evaluator.md",
     "./loop/agents/task-cutter.md",
     "./loop/agents/task-implementer.md",
+    "./loop/agents/task-orchestrator.md",
     "./loop/agents/task-readiness-reviewer.md",
     "./loop/agents/task-scout.md",
     "./loop/agents/task-validator.md",

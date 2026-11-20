@@ -327,6 +327,7 @@ def test_cleanup_keeps_logs_and_folds_stats(repo):
     write(repo, f'{f}/runs/01/stats.md', 'header\n| 01 | 9 | 40k | 200k | 0 | 30 | 50 |\n')
     write(repo, f'{f}/runs/01/review-1.md', report('Review', 1, '### R1-1 · bug\nStatus: fixed\nFix: abc1234 clamps the end of the range\n'
                                                            '### R1-2 · nit\nStatus: declined\nFix: Declined: out of the diff surface\n'))
+    write(repo, f'{f}/runs/01/snags.md', '- carry printed validate after a JSX comment fix, row 8, one round\n')
     write(repo, f'{f}/runs/02/log.md', 'log 2\n')
     write(repo, f'{f}/runs/02/shots/before/x.png', 'png')
     for kept in ('plan-log.md', 'DECISIONS.md', '00-overview.md'):
@@ -335,29 +336,32 @@ def test_cleanup_keeps_logs_and_folds_stats(repo):
         write(repo, f'{f}/{gone}', 'gone\n')
     loop(repo, 'commit', 'docs: runs', f)
     out = loop(repo, 'cleanup', f).stdout
-    assert 'removed 10 run and plan files, folded 1 stats totals, kept 1 fixed findings' in out
+    assert 'removed 11 run and plan files, folded 1 stats totals, kept 1 fixed findings, 1 snags' in out
     assert 'no stats total for task 02' in out
     staged = git(repo, 'diff', '--cached', '--name-status').splitlines()
     assert sorted(staged) == sorted([f'D\t{f}/runs/01/brief.md', f'D\t{f}/runs/01/stats.md',
                                      f'D\t{f}/runs/01/review-1.md', f'A\t{f}/runs/findings.md',
+                                     f'D\t{f}/runs/01/snags.md', f'A\t{f}/runs/snags.md',
                                      f'A\t{f}/runs/stats.md', f'D\t{f}/runs/02/shots/before/x.png',
                                      f'D\t{f}/01-a.md',
                                      *(f'D\t{f}/{gone}' for gone in ('PLAN.md', 'EVALUATION.md', 'plans/PLAN-A.md',
                                                                     'readiness/01.md', 'grill/spec.md'))])
     kept = open(os.path.join(repo, f'{f}/runs/findings.md')).read()
     assert kept.endswith('|---|---|---|\n| 01 | R1-1 · bug | abc1234 clamps the end of the range |\n')
+    assert open(os.path.join(repo, f'{f}/runs/snags.md')).read().endswith(
+        '|---|---|\n| 01 | carry printed validate after a JSX comment fix, row 8, one round |\n')
     stats = open(os.path.join(repo, f'{f}/runs/stats.md')).read()
     assert stats.startswith(f'# {FEATURE}: task sizes\n')
     assert stats.endswith('|---|---|---|---|---|---|---|\n| 01 | 9 | 40k | 200k | 0 | 30 | 50 |\n')
     loop(repo, 'commit', 'docs: clean up')
     again = loop(repo, 'cleanup', f).stdout
-    assert 'removed 0 run and plan files, folded 1 stats totals, kept 1 fixed findings' in again
+    assert 'removed 0 run and plan files, folded 1 stats totals, kept 1 fixed findings, 1 snags' in again
     assert git(repo, 'status', '--porcelain') == ''  # a second run keeps what the first folded
     # A feedback round restores task 01's run files: its new total replaces the old one.
     git(repo, 'checkout', '-q', 'HEAD^', '--', f'{f}/runs/01')
     write(repo, f'{f}/runs/01/stats.md', 'header\n| 01 | 12 | 40k | 260k | 0 | 41 | 61 |\n')
     loop(repo, 'commit', 'docs: feedback', f)
-    assert 'folded 1 stats totals, kept 1 fixed findings' in loop(repo, 'cleanup', f).stdout
+    assert 'folded 1 stats totals, kept 1 fixed findings, 1 snags' in loop(repo, 'cleanup', f).stdout
     assert open(os.path.join(repo, f'{f}/runs/stats.md')).read().endswith('---|\n| 01 | 12 | 40k | 260k | 0 | 41 | 61 |\n')
 
 

@@ -235,6 +235,18 @@ def test_cli_prints_both_tables(repo, home):
     ]
 
 
+def test_cli_counts_the_task_orchestrator_in_the_total_but_not_in_the_size(repo, home):
+    sub = home.project / 's' / 'subagents'
+    write_run(sub, 'agent-a', 'eliot:task-orchestrator',
+              events(prompt('feat-a', '01', 'Mode: start'), minutes=(0, 5, 9), usage={'input_tokens': 90_000}))
+    # Agents it starts are nested under it.
+    write_run(sub / 'nested', 'agent-b', 'eliot:task-scout', events(prompt('feat-a', '01'), minutes=(1, 3)))
+    rows = table_rows(run(repo, home, 'feat-a').stdout)
+    assert rows == ['| 01 | task-orchestrator | start | 90k | 2 | 0 | 9 | 9 |  |',
+                    '| 01 | task-scout |  | 21k | 1 | 0 | 2 | 2 |  |',
+                    '| 01 | 2 | 21k task-scout | 111k | 0 | 2 | 2 |']
+
+
 def test_cli_filters_to_one_task(repo, home):
     sub = home.project / 's' / 'subagents'
     write_run(sub, 'agent-a', 'task-scout', events(prompt('feat-a', '01')))

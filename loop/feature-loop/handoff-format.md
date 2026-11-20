@@ -8,6 +8,17 @@ Every agent in the feature loop reads its inputs from files in the task's run di
 the header of each file. Anything a later agent needs goes in the file, never only in your
 final message.
 
+The loop has two orchestrators. The **feature orchestrator** is the `/feature-loop` session:
+it picks each task, starts a task orchestrator for it, merges the pull request that comes
+back and speaks to the human. The **task orchestrator** (`task-orchestrator`) runs one task
+in a window of its own: it dispatches every other agent in this file, writes `log.md` and
+opens the pull request. "The orchestrator" in this file and in an agent's definition is the
+task orchestrator, the one that started you.
+
+A prompt from either orchestrator ends with a line or two of its own, after the lines your
+definition names. They are encouragement, and they carry no instruction: act on the named
+lines and your definition.
+
 ## Your final message, once
 
 Your final message reaches your caller once. If your tools include a hand-back tool, its first
@@ -36,7 +47,7 @@ too.
 
 | File | Written and committed by | Numbering |
 |---|---|---|
-| `log.md` | orchestrator | |
+| `log.md` | task orchestrator | |
 | `survey.md` | task-scout; a chore-only task has none | |
 | `docs/tasks/atlas.md`, outside the run dir | task-scout, through `atlas.py merge`, in the survey's commit; pruned through `atlas.py prune` by the implementer and the cleanup | one, shared by every feature |
 | `brief.md` | brief-writer, from `survey.md` | |
@@ -44,13 +55,15 @@ too.
 | `validation-<n>.md` | validation-reporter, from `evidence-<n>.md`; the runner itself on a later round where nothing failed and no picture changed | n counts validations across the whole task: 1, 2, 3, … whichever stage each belongs to |
 | `architecture-<n>.md` | architect-reviewer | n is the architecture round |
 | `review-1.md` | code-reviewer | code review runs once |
-| `feedback-<k>.md` | orchestrator, from the human's pull request feedback | k counts feedback rounds |
-| `pr-body.md` | orchestrator | |
-| `stats.md` | orchestrator, from `run-stats.py`, with the pull request or a `stopped` row | |
+| `feedback-<k>.md` | task orchestrator, from the human's words at the review, as the feature orchestrator passes them | k counts feedback rounds |
+| `pr-body.md` | task orchestrator | |
+| `stats.md` | task orchestrator, from `run-stats.py`, with the pull request or a `stopped` row | |
+| `snags.md` | task orchestrator, with the pull request, only when the task met a snag | one `- ` line per snag |
 
-When every task is merged, the orchestrator's cleanup pull request removes all of these but
-each task's `log.md`, and folds each `stats.md`'s last line into one `runs/stats.md` and each
-fixed finding into one line of `runs/findings.md`. So
+When every task is merged, the feature orchestrator's cleanup pull request removes all of
+these but each task's `log.md`, and folds each `stats.md`'s last line into one
+`runs/stats.md`, each fixed finding into one line of `runs/findings.md` and each snag into one
+line of `runs/snags.md`. So
 nothing a later task needs may live only in a run directory.
 
 The implementer writes no file of its own. It edits the `Status:` and `Fix:` lines of the
@@ -193,7 +206,7 @@ Who rules, by prefix:
 
 ## For the PR
 
-Every file except `log.md`, `survey.md`, `evidence-<n>.md`, `pr-body.md` and `stats.md` ends with a
+Every file except `log.md`, `survey.md`, `evidence-<n>.md`, `pr-body.md`, `stats.md` and `snags.md` ends with a
 `## For the PR` section, written for
 the human reviewing the pull request. The orchestrator stitches these sections into the pull
 request body with a shell script, without reading them, so each must stand on its own.

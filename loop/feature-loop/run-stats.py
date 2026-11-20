@@ -12,8 +12,13 @@ every gap of STALL_MIN or more between two transcript events: a stream that was 
 a permission or classifier timeout, a human interrupt. Those count under Stalls instead.
 A run the human stopped is left out, and counted in a line between the tables.
 
-Between the two tables, the orchestrator: for each task, the main session's largest context,
-its turns and tool calls while it was routing that task, and its turns per dispatch.
+Between the two tables, the feature orchestrator: for each task, the main session's largest
+context, its turns and tool calls while that task ran, and its turns per dispatch.
+
+The task orchestrator is a run like any other, with a row in the first table. A task's total
+counts it in Runs and Total context only: its context grows with the task's rounds and it is
+awake for the whole task, so Largest context, Over 50k and the minutes leave it out and stay
+measures of the work.
 
 Given a task, this prints what the orchestrator commits as runs/<NN>/stats.md, and its last
 line is that task's total.
@@ -27,9 +32,10 @@ import re
 import subprocess
 import sys
 
+ROUTER = 'task-orchestrator'
 LOOP_AGENTS = {'task-scout', 'brief-writer', 'task-implementer', 'task-validator',
                'validation-reporter', 'architect-reviewer', 'code-reviewer', 'test-writer',
-               'code-writer'}
+               'code-writer', ROUTER}
 STALL_MIN = 10
 
 
@@ -173,10 +179,11 @@ def main():
     for r in runs:
         by_task[r['task']].append(r)
     for task, group in by_task.items():
-        biggest = max(group, key=lambda r: r['peak'])
+        work = [r for r in group if r['agent'] != ROUTER] or group
+        biggest = max(work, key=lambda r: r['peak'])
         print(f"| {task} | {len(group)} | {biggest['peak'] // 1000}k {biggest['agent']} | "
-              f"{sum(r['peak'] for r in group) // 1000}k | {sum(r['peak'] > 50_000 for r in group)} | {sum(r['active'] for r in group):.0f} | "
-              f"{sum(r['wall'] for r in group):.0f} |")
+              f"{sum(r['peak'] for r in group) // 1000}k | {sum(r['peak'] > 50_000 for r in work)} | {sum(r['active'] for r in work):.0f} | "
+              f"{sum(r['wall'] for r in work):.0f} |")
 
 
 if __name__ == '__main__':
