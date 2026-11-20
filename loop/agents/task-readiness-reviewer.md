@@ -34,9 +34,14 @@ Do not open PLAN.md to fill a gap. A gap you would need PLAN.md for is a finding
 Check, and write a finding for each failure:
 
 - **Layout.** Every section plan-format.md lists, in order, with its exact heading.
-- **Criteria.** Each is falsifiable by a test, script, command, code read, view or named owner
-  check. Each "How to validate" step names the criterion it proves, and every criterion has a
-  step or a test.
+- **Criteria.** Each is falsifiable by a test, script, command, code read or view. Each "How
+  to validate" step names the criterion it proves, and every criterion has a step or a test.
+- **No manual validation.** A criterion or a step that only the owner can check is a finding:
+  an owner check, a real device, a judgement of feel, look or sound. The loop merges this task
+  without the owner and builds the next on it. Expected says what plan-format.md's "No manual
+  validation" asks: the measurable part as a criterion an agent can run, and the judgement in
+  the overview's "Owner checks, at the review". An agent browser check is not manual, however
+  long it takes.
 - **Kinds.** Every criterion starts `[logic]`, `[style]` or `[chore]`, and the kind matches
   plan-format.md's "Logic and style". Every logic criterion has a seam and a `## Tests` entry. No style
   criterion does: a style criterion that `## Tests` covers, that names a Jest or `tests/app/`
@@ -104,5 +109,6 @@ The six header lines of your file, exactly as written, then `File: <path>`.
 | "It has a line anchor but the line is right" | If an earlier task changes the file, it will not be right when this task runs. |
 | "I'll check PLAN.md to see what they meant" | The loop cannot. If the task needs it, it is a finding. |
 | "This criterion is vague but the intent is clear" | The validator needs something to observe. Write the finding. |
+| "This step says 'owner check', which the layout used to allow" | It is a finding now. A task that waits on the owner holds every task after it. |
 | "The owner should probably weigh in" | Only if the spec and decisions leave it open. Otherwise the cutter fixes it. |
 | "This task is too big" | Say so in Size notes. Size never blocks in v1. |

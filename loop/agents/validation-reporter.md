@@ -61,6 +61,9 @@ still cannot tell after a rerun, that item is `unverified` and it gets a finding
    pass an item no test covers. That item is `unverified` and gets a finding.
 4. An item the runner recorded as `not run` is `unverified` and gets a finding, whatever the
    reason was. Nothing passes because nobody looked.
+   An item recorded as `manual` that the task file does not hand to the owner by name is the
+   same: `unverified`, with a `tooling` finding whose Expected quotes the step, so the next
+   runner runs it.
 5. The runner's own reading of the code is evidence like any other. When it says the app is
    wrong, check that the quoted line says so before you raise the finding.
 6. **Label the cause.** A finding whose cause is the validator's own script or one of the

@@ -68,8 +68,13 @@ would have to expose.
 2. Give every item a method: `script`, `jest`, `command`, `code-read`, `view` or `manual`.
    Anything a browser can observe gets a script. A `[style]` criterion gets `view`, through
    the views that prove it, and a script test as well when it gives a number or a colour:
-   measure it with `getComputedStyle` or `boundingBox`. `manual` is what no machine can
-   observe, and you do not attempt it. A chore-only task has no views and no base readings:
+   measure it with `getComputedStyle` or `boundingBox`. `manual` is only a step the task file itself hands to the
+   owner by name, in a task cut before owner checks moved to the overview, and you do not
+   attempt it. Everything else is yours to run. An agent browser check is never `manual`,
+   whatever it needs: a real YouTube embed, a wait past a 30 second heartbeat, a second
+   viewport, a signed-in fixture. Run it as the overview's browser check setup says. If you
+   try and something stops you, the item is `blocked` with what stopped you and what you
+   tried, and never `manual` or `not run`: a check nobody ran costs the task a whole round. A chore-only task has no views and no base readings:
    its criteria are `command` and `code-read`, a test it turns on is a `script` run of that
    test, and it has one more item, `inert`, the output of
    `python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py inert <base commit>`. Every line it lists besides a

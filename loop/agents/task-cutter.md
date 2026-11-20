@@ -36,6 +36,10 @@ under `docs/tasks/` for rules that carry over. Write `<feature dir>/00-overview.
    from it is an anchor that rots.
 4. **Rules and validation.** Carry over the previous overview's rules that still apply, add
    the ones DECISIONS.md makes, and write "How every task is validated" for this feature.
+   Its "Owner checks, at the review" holds everything in the spec and the visual spec that
+   only a person can judge, each with its steps and the tasks it looks at. These are the only
+   manual checks the feature has: plan-format.md's "No manual validation" keeps them out of
+   every task.
 5. End with the "Task file layout" pointer, as plan-format.md gives it.
 
 ## Mode cut
@@ -51,8 +55,13 @@ plan-format.md's "Task files" lists, in order.
 
 - **Carry everything the task needs from PLAN.md:** the interfaces as signatures, the reason
   for each choice, the risks that land here. The loop never opens PLAN.md.
-- **Criteria are falsifiable.** Each one names what a test, a script, a command, a code read, a
-  view or a named owner check would see. "Works well" is not a criterion.
+- **Criteria are falsifiable.** Each one names what a test, a script, a command, a code read or
+  a view would see. "Works well" is not a criterion.
+- **No manual validation.** The loop merges each task without the owner and builds the next
+  one on it, so a criterion or step only the owner can check would hold every later task.
+  Write none: no owner check, no "on a real phone", no "judge whether". Keep what a machine
+  can measure of it as a criterion, and check that the judgement itself is in the overview's
+  "Owner checks, at the review", as plan-format.md's "No manual validation" says.
 - **Every criterion has a kind.** `[logic]`, `[style]` or `[chore]`, by plan-format.md's
   "Logic and style". Logic gets a seam and a `## Tests` entry. Style gets neither: it gets a
   view under `How to validate`, and it says what the user sees in numbers, not the class
@@ -140,6 +149,7 @@ every task is rare: name it `all` only when a rule every task is judged by chang
 | "I'll add a criterion the plan doesn't have" | Only if the spec or a decision requires it, and cite which. |
 | "A test that pins the class makes the style criterion falsifiable" | A view and a measurement in the validation script make it falsifiable. Tests are for logic. |
 | "This cleanup is two lines, I'll fold it into the logic task" | If it touches none of that task's lines, cut it as its own chore task. Folded in, it rides the full loop. |
+| "Only the owner can tell if this feels right, so it's an owner check on the task" | A task has none: it would hold every later task. Measure what a machine can, and put the judgement in the overview's owner checks for the review. |
 | "I touched the overview, so `Applies to: all` is the safe answer" | It sends every task through a reviewer again for one edit. Name the tasks that read the lines you changed. |
 | "The finding is wrong, I'll ignore it" | Decline it with a quote. Silence reads as unfixed. |
 | "Another slice's task names this differently, I'll fix theirs now" | In mode cut, write yours as PLAN.md names it. Reconcile fixes the edges. |

@@ -296,7 +296,11 @@ one task needs.
     logs, the atlas, validation scripts):
     `git diff --name-only <feature branch>...HEAD -- . ':!docs/tasks' ':!tests/validation'`.
     ### 2. Agent browser checks
-    ### 3. Owner checks
+    ### 3. Owner checks, at the review
+    What only the owner can judge, for the whole feature: a real phone in a hand, how audio
+    sounds, whether a motion feels quiet enough. One `- [ ]` line each, with the exact steps
+    and the tasks whose work it looks at. The owner works through them once, at the loop's
+    review of the finished feature. No task carries one, so no task waits on the owner.
 
     ## Task file layout
     Every task file follows `<plugin root>/loop/feature-plan/plan-format.md`, "Task files".
@@ -324,8 +328,9 @@ their exact heading, so those four headings cannot change without changing the l
 4. `## What must be true when this is done`. Numbered across the whole section, grouped under
    bold labels naming their T or D ids. Each criterion starts with its kind, `[logic]`,
    `[style]` or `[chore]`, as "Logic and style" below defines them:
-   `4. [style] The speed thumb is a 16px brand-blue circle ...`. Each is falsifiable by a test, a script, a command, a code read, a
-   view or a named owner check, and carries an anchor where it is about code.
+   `4. [style] The speed thumb is a 16px brand-blue circle ...`. Each is falsifiable by a test, a script, a command, a code read or a
+   view, which an agent checks without the owner, and carries an anchor where it is about
+   code. What only the owner can judge is never a criterion: see "No manual validation".
 5. `## Tests`. Per seam, the behaviours to drive in tracer-bullet order, with test names for
    Playwright specs. Logic criteria only: a style criterion never appears here. A chore
    criterion appears only to name an existing test it turns on, with the temporary break that
@@ -335,8 +340,8 @@ their exact heading, so those four headings cannot change without changing the l
 7. `## Known traps`. What will cost a cycle if missed, each with its anchor.
 8. `## Out of scope`. What a reader might expect here that another task or nobody does,
    naming which.
-9. `## How to validate`. Automated (the extra greps and specs), agent browser checks, owner
-   checks. Each step names the criterion it proves. A task with style criteria adds a
+9. `## How to validate`. Automated (the extra greps and specs) and agent browser checks,
+   and no owner checks. Each step names the criterion it proves. A task with style criteria adds a
    `Views:` list, one line per screen the validator photographs before and after the change:
 
        Views:
@@ -353,7 +358,7 @@ their exact heading, so those four headings cannot change without changing the l
 
         Scout: <n> anchors over <n> files.
         Largest cycle: <the behaviour>. Reads <files>.
-        Validation: <n> steps, <n> of them browser checks, <n> owner checks.
+        Validation: <n> steps, <n> of them browser checks.
 
     A chore-only task has no scout and no tdd cycles. Its `Scout:` line counts the anchors
     the brief-writer checks in the scout's place, and `Largest cycle:` names its biggest
@@ -363,6 +368,25 @@ their exact heading, so those four headings cannot change without changing the l
 
 A task carries everything it needs from PLAN.md: interfaces as signatures, the reason for a
 choice, a risk. "See PLAN.md" is never enough.
+
+## No manual validation
+
+The loop builds, validates and merges every task without the owner, and starts the next one
+on top of it. A task that needs the owner to validate it would hold every task after it until
+the owner looked. So every criterion and every "How to validate" step of a task is one an
+agent can run: a test, a script, a command, a code read, a view, or an agent browser check
+against the fixtures the overview names.
+
+When something can only be judged by a person, split it:
+
+- **What a machine can observe of it** stays in the task, as a measurement: the colour and
+  the duration of an animation, a 48px target, the element that takes focus.
+- **The judgement itself** goes in the overview's "Owner checks, at the review", with its
+  steps and the tasks it looks at. It is not a criterion, no task's validation waits for it,
+  and the owner does it once, when the feature is built.
+
+A task that would be left with no machine-checkable criterion is not a task: fold what it
+builds into the task that makes it observable.
 
 ## Logic and style
 
