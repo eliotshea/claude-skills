@@ -261,12 +261,17 @@ Use the Agent tool with the agent's `subagent_type`. Every prompt starts with:
 | apply the decisions, logged `decisions applied` | `eliot:task-cutter` | `Mode: decisions`, `Decisions: <new D and E ids>`, `Findings: <file>: <ids>` for each finding the grill ruled on |
 | apply the feedback, logged `feedback applied` | `eliot:task-cutter` | `Mode: feedback`, `Feedback: <file>` |
 
-Readiness rounds are numbered across the whole plan. A round reviews only the tasks this
-prints: every task without a READY readiness file, and every task whose file, a dependency's
-or a dependant's file, or `00-overview.md` changed since its last review. A task left out
-keeps its READY file from an earlier round, and the headers still sum over every file.
+Readiness rounds are numbered across the whole plan. A round reviews only the tasks a change
+applies to, which is what this prints: every task without a READY readiness file, every task
+whose own file changed since its last review, and every task the cutter's final message named
+in `Applies to:`. A change to `00-overview.md` or to a neighbouring task sends back only the
+tasks the cutter says it reaches. A task left out keeps its READY file from an earlier round,
+and the headers still sum over every file.
 
-    python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py readiness-set <feature>
+    python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py readiness-set <feature> --applies '<the cutter's Applies to list>'
+
+Leave `--applies` out after the cut and the reconcile, when no task is READY yet. After a
+resume, when the cutter's final message is no longer in your context, pass `--applies all`.
 
 Open finding ids, without opening a file:
 
@@ -282,7 +287,8 @@ After a step's agents return:
    - Plan: `head -4 PLAN.md`, and `grep -c '^### P[0-9]' DECISIONS.md` for the P count.
    - Overview: `grep -c '^## ' 00-overview.md` and a `## File map` heading.
    - Cut: every task in `Tasks:` has a file whose first line starts `# Task <NN>:`.
-   - Reconcile, fix, decisions, feedback: the cutter's final message has a `Files:` line.
+   - Reconcile, fix, decisions, feedback: the cutter's final message has a `Files:` line, and
+     all but reconcile an `Applies to:` line.
    - Readiness: `head -6 readiness/<NN>.md` is valid for this round (plan-format.md), for
      each task dispatched.
 2. **If a check fails,** dispatch that agent again with the same prompt plus

@@ -453,7 +453,7 @@ def readiness(repo, nn, verdict, commit):
           'Blocking: 0\nOwner: 0\nRepeat: none\n')
 
 
-def test_readiness_set_reviews_changed_tasks_their_neighbours_and_the_unready(repo):
+def test_readiness_set_reviews_changed_tasks_named_tasks_and_the_unready(repo):
     d = f'docs/tasks/{FEATURE}'
     write(repo, f'{d}/00-overview.md', '# Overview\n')
     write(repo, f'{d}/01-a.md', '# Task 01: A\n\nPlan slice 1. Depends on none. Blocks 02.\n')
@@ -473,10 +473,16 @@ def test_readiness_set_reviews_changed_tasks_their_neighbours_and_the_unready(re
 
     write(repo, f'{d}/02-b.md', '# Task 02: B\n\nPlan slice 1. Depends on 01.\nBlocks none. Fixed.\n')
     git(repo, 'commit', '-qam', 'fix')
-    assert loop(repo, 'readiness-set', FEATURE).stdout == f'{d}/01-a.md\n{d}/02-b.md\n{d}/11b-e.md\n'
+    # 02 changed. Its neighbour 01 is reviewed again only when the cutter says the change reaches it.
+    assert loop(repo, 'readiness-set', FEATURE).stdout == f'{d}/02-b.md\n{d}/11b-e.md\n'
+    assert (loop(repo, 'readiness-set', FEATURE, '--applies', '01, 02').stdout
+            == f'{d}/01-a.md\n{d}/02-b.md\n{d}/11b-e.md\n')
 
+    # An overview change sends back the tasks it applies to, not the feature.
     write(repo, f'{d}/00-overview.md', '# Overview, fixed\n')
-    assert len(loop(repo, 'readiness-set', FEATURE).stdout.splitlines()) == 5
+    assert loop(repo, 'readiness-set', FEATURE, '--applies', '04').stdout == f'{d}/02-b.md\n{d}/04-d.md\n{d}/11b-e.md\n'
+    assert len(loop(repo, 'readiness-set', FEATURE, '--applies', 'all').stdout.splitlines()) == 5
+    assert 'names no task file: 09' in loop(repo, 'readiness-set', FEATURE, '--applies', '09', check=False).stderr
 
 
 # run

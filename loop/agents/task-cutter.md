@@ -123,7 +123,15 @@ list it under `Owner questions:` in your final message and change nothing for it
     Tasks: <NN list>, or the task count in mode overview
     Anchors: <per task, NN=count, comma-separated>, in modes cut and reconcile
     Fixed: <count>, Declined: <count>, in modes fix, decisions and feedback
+    Applies to: <NN list, or none>, in modes fix, decisions and feedback
     Owner questions: <count, or none>
+
+`Applies to:` decides which tasks the next readiness round reviews again, and a task you leave
+out keeps its READY. List every task your change reaches: each task whose file you edited, and
+each task that reads something you changed somewhere else, such as an overview rule, a file-map
+row, or a symbol, signature or path another task cites. A task the change does not reach is
+not on the list, however close it sits in the dependency order. An overview edit that reaches
+every task is rare: name it `all` only when a rule every task is judged by changed.
 
 | Thought | Do this |
 |---|---|
@@ -132,5 +140,6 @@ list it under `Owner questions:` in your final message and change nothing for it
 | "I'll add a criterion the plan doesn't have" | Only if the spec or a decision requires it, and cite which. |
 | "A test that pins the class makes the style criterion falsifiable" | A view and a measurement in the validation script make it falsifiable. Tests are for logic. |
 | "This cleanup is two lines, I'll fold it into the logic task" | If it touches none of that task's lines, cut it as its own chore task. Folded in, it rides the full loop. |
+| "I touched the overview, so `Applies to: all` is the safe answer" | It sends every task through a reviewer again for one edit. Name the tasks that read the lines you changed. |
 | "The finding is wrong, I'll ignore it" | Decline it with a quote. Silence reads as unfixed. |
 | "Another slice's task names this differently, I'll fix theirs now" | In mode cut, write yours as PLAN.md names it. Reconcile fixes the edges. |

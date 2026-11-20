@@ -63,8 +63,10 @@ findings prints the ids of the findings with one of these statuses (open or reop
 --status says otherwise) and, with --owner, that Owner, and with --label, that label after the
 id's dot; their `### ` lines with --titles; or how many there are with --count.
 readiness-set prints the task files the next readiness round reviews: every task without a
-READY readiness file, and every task whose file, a neighbour's (Depends on or Blocks, either
-way) or 00-overview.md changed since the `Commit:` its readiness file reviewed.
+READY readiness file, every task whose own file changed since the `Commit:` its readiness
+file reviewed, and every task `--applies '<NN, NN>'` names (`all` for every task): the tasks
+the cutter says its change reaches without editing them. A change to 00-overview.md or to a
+neighbour sends no task back by itself.
 round-plan tells a validation round what it may carry instead of running again. `gates:` is
 `all`, `tsc lint` when only validation scripts changed since the last round, or `carried <k>`
 when nothing outside docs and .claude did. `regression:` is `due`, or `carried <k>` when round
@@ -502,21 +504,17 @@ TASK = re.compile(r'^(?!00-)(\d\d[a-z]?)-.*\.md$')
 def cmd_readiness_set(a):
     d = feature_dir(a.feature)
     tasks = {m.group(1): f'{d}/{f}' for f in sorted(os.listdir(d)) if (m := TASK.match(f))}
-    near = {nn: {nn} for nn in tasks}
-    for nn, path in tasks.items():
-        # From the header's `Depends on <tasks>. Blocks <tasks>.` to the paragraph's end: it may wrap.
-        m = re.search(r'Depends on.*?(?:\n\n|\Z)', read(path), re.S)
-        for other in re.findall(r'\b(\d\d[a-z]?)\b', m.group(0) if m else ''):
-            if other in tasks:
-                near[nn].add(other)
-                near[other].add(nn)
+    # The cutter's `Applies to:` line: the tasks a change reaches without editing their file.
+    applies = set(tasks) if a.applies.strip() == 'all' else set(re.findall(r'\d\d[a-z]?', a.applies))
+    if applies - set(tasks):
+        raise Fail(f'--applies names no task file: {", ".join(sorted(applies - set(tasks)))}.')
     for nn, path in tasks.items():
         ready = f'{d}/readiness/{nn}.md'
         head = read(ready).splitlines()[:6] if os.path.exists(ready) else []
         commit = next((l.split(': ', 1)[1] for l in head if l.startswith('Commit: ')), '')
-        watched = [f'{d}/00-overview.md', *(tasks[o] for o in sorted(near[nn]))]
-        diff = run('git', 'diff', '--name-only', commit, '--', *watched, check=False)
-        if 'Verdict: READY' not in head or not commit or diff.returncode or diff.stdout.strip():
+        diff = run('git', 'diff', '--name-only', commit, '--', path, check=False)
+        if ('Verdict: READY' not in head or not commit or diff.returncode or diff.stdout.strip()
+                or nn in applies):
             print(path)
 
 
@@ -745,7 +743,9 @@ def main(argv=None):
     s.add_argument('--label')
     s.add_argument('--titles', action='store_true')
     s.add_argument('--count', action='store_true')
-    sub.add_parser('readiness-set').add_argument('feature')
+    s = sub.add_parser('readiness-set')
+    s.add_argument('feature')
+    s.add_argument('--applies', default='')
     s = sub.add_parser('run')
     s.add_argument('name')
     s.add_argument('--grep')
