@@ -428,7 +428,10 @@ def cmd_cleanup(a):
                                      *sorted(glob.glob(f'{d}feedback-*.md'))])
              if p and os.path.exists(p)
              for h, fields in findings(p) if fields.get('Fix') and not fields['Fix'].startswith('Declined')]
-    totals, fixed = rows(kept[0]) + totals, rows(kept[1]) + fixed
+    # A feedback round after a cleanup restores a task's run files, so a later cleanup meets
+    # that task again: its new total replaces the old one, and a finding is kept once.
+    totals = list({t.split('|')[1].strip() if '|' in t else t: t for t in rows(kept[0]) + totals}.values())
+    fixed = list(dict.fromkeys(rows(kept[1]) + fixed))
     doomed = [p for p in git('ls-files', '--', f'{f}/runs').splitlines()
               if not p.endswith('/log.md') and p not in kept]
     doomed += git('ls-files', '--', *(f'{f}/{p}' for p in PLAN_DRAFTS)).splitlines()

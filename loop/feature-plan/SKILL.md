@@ -102,8 +102,9 @@ Every session pushes its branch before it ends.
    <feature>`, and open the draft PR, labelled `feature-branch`:
    `gh label create feature-branch --color 1D76DB --description "Feature branch PR into master"
    --force`, then `gh pr create --draft --base master --head <feature> --title "<type>(<scope>):
-   <issue title, lower case> (#<n>)" --label feature-branch --body "Feature branch for #<n>.
-   Planned with /feature-plan, built with /feature-loop."`. Take type and scope from `git log
+   <issue title, lower case> (#<n>)" --label feature-branch --body "Closes #<n>.
+   Planned with /feature-plan, built with /feature-loop."`. `Closes` is what closes the
+   issue when the owner merges the feature. Take type and scope from `git log
    --oneline -8` on master.
 3. **Spec branch.** In the same worktree, `git checkout -b <feature>-spec`. No other session
    can have this worktree open yet, so this one switch is safe. Put the draft PR's number in

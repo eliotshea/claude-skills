@@ -75,8 +75,9 @@ handoff-format.md's "Commands" gives, and never `$` followed by a digit in this 
    `gh api repos/{owner}/{repo}/issues/<number>/labels -f 'labels[]=feature-branch'`. If it
    finds none, open it as a draft, because it is where the human reviews the feature:
    `gh pr create --draft --base master --head <feature-branch> --title "<feature>" --label
-   feature-branch --body "Feature branch for <feature>. Built with /feature-loop."`. Keep its
-   number.
+   feature-branch --body "Feature branch for <feature>. Built with /feature-loop. Closes #<n>."`,
+   with the issue number from a feature named `issue-<n>-…`, and without that sentence
+   otherwise. Keep its number.
 
 ## Find where you are
 
@@ -414,30 +415,45 @@ Applying the answer:
 
 ## The review
 
-When every task is complete and merged, the human reviews the feature once.
+When every task is complete and merged, the human reviews the feature once, on a feature
+pull request that is clean and marked ready.
 
-1. Run step 1 of "Cleanup". A `MERGED` cleanup pull request means the review is over and the
-   feature is done: say so and stop.
-2. Otherwise stop and tell the human: the feature pull request's URL
-   (`gh pr list --base master --head <feature-branch> --json url -q '.[].url'`); that each
-   task's result, manual checks, disputed findings and pictures are its comments; the manual
-   checks waiting, from `grep -c -- '- \[ \]' docs/tasks/<feature>/runs/*/pr-body.md`; any task
-   whose largest context was over 50k, from the last line of each `stats.md`; and to reply
-   with feedback, or `clean up` when the feature is right. Print no command.
+1. **Count, while the run files are there.** The manual checks waiting, from
+   `grep -c -- '- \[ \]' docs/tasks/<feature>/runs/*/pr-body.md` and, for the owner checks the
+   plan left for the review, `grep -c -- '- \[ \]' docs/tasks/<feature>/00-overview.md`. Any
+   task whose largest context was over 50k, from the last line of each `stats.md`. The cleanup
+   removes those files, so after it these numbers are only in your context: a session resumed
+   past the cleanup points the human at the comments instead.
+2. **Clean up.** Run "Cleanup". It is the last task on the feature branch.
+3. **Mark it ready.** The feature pull request was opened as a draft. Now that it holds
+   every task and no run files, `gh pr ready <feature pull request number>`. It changes
+   nothing on a pull request that is already ready.
+4. Stop and tell the human: the feature pull request's URL
+   (`gh pr list --base master --head <feature-branch> --json url -q '.[].url'`), and that it
+   is cleaned up and ready for review; that each task's result, manual checks, disputed
+   findings and pictures are its comments; the counts from step 1; and that it is theirs to
+   merge, or to reply to with feedback. Print no command.
 
 ## Cleanup
 
-Once the human has reviewed the feature and replied `clean up`, the run files have done
-their job. One last pull request into the feature branch removes them, so the feature does not reach `master` carrying
-hundreds of handoff files. Everything it removes stays in git history at the commit the
-cleanup starts from.
+When every task is merged, the run files have done their job. The cleanup is the last task
+on the feature branch: one pull request into it removes them before the feature pull request
+is marked ready, so the feature never reaches `master` carrying hundreds of handoff files.
+Everything it removes stays in git history at the commit the cleanup starts from.
 
-1. **Once only.** Look for a cleanup pull request already made:
+1. **Only when there is something to clean.** A cleanup that was cut off left its pull
+   request open:
 
-       gh pr list --base <feature-branch> --label cleanup --state all --json number,state,url
+       gh pr list --base <feature-branch> --label cleanup --state open --json number,url
 
-   `MERGED`: say the feature is done and stop. `OPEN`: merge it as in step 6. `CLOSED`, with
-   none open or merged: ask the human whether to open another. None: go on.
+   If that finds one, merge it as in step 6. Otherwise the cleanup is due exactly while a
+   task's run files are on the feature branch:
+
+       git ls-files 'docs/tasks/<feature>/runs/*/pr-body.md'
+
+   Nothing printed: the branch is clean, go back to "The review", step 3. A feedback round
+   after a cleanup restores a task's run files (see "When the human replies"), so the cleanup
+   runs once more after it.
 2. **Branch.** From the feature branch, freshly pulled in "Find where you are", step 2:
 
        git checkout -B <feature-branch>-cleanup origin/<feature-branch>
@@ -468,8 +484,9 @@ cleanup starts from.
 
        gh pr create --base <feature-branch> --head <feature-branch>-cleanup --title "docs(<feature>): clean up loop run files" --label cleanup --body-file <that file>
 
-6. **Merge.** Merge it as step 5 of "The pull request" merges a task's. Then say the feature
-   is done and its pull request into `master` is the human's to merge. Print no command.
+6. **Merge.** Merge it as step 5 of "The pull request" merges a task's, then
+   `git checkout <feature-branch>` and, as its own call, `git pull --ff-only origin
+   <feature-branch>`. Go back to "The review", step 3.
 
 The cleanup gets no log row: it belongs to no task, and each `log.md` ends where its task did.
 
@@ -507,11 +524,18 @@ task whose scout could not fit the ground it had to cover.
 
 ## When the human replies
 
-- **`clean up`,** at the review. Go to "Cleanup".
 - **Feedback,** at the review. Take the points one task at a time: `PROGRESS.md` says which
   task built what, and a point you cannot place is a question for the human. For a task,
   `git checkout -b <its task branch>-feedback-<k> origin/<feature-branch>`, where k counts
-  feedback rounds on that task, and write `runs/<NN>/feedback-<k>.md`:
+  feedback rounds on that task. The cleanup removed the task's file and its run files, and
+  the agents need both, so bring them back from the commit before the latest cleanup:
+
+      git log -1 --format=%h --grep 'clean up loop run files' origin/<feature-branch>
+      git ls-tree --name-only <that commit>^ docs/tasks/<feature>/
+      git checkout <that commit>^ -- docs/tasks/<feature>/<NN>-<slug>.md docs/tasks/<feature>/runs/<NN>
+
+  Type the commit the first call printed, with the `^` after it. Then write
+  `runs/<NN>/feedback-<k>.md`:
   - The header comes from handoff-format.md, with Verdict FINDINGS and Blocking set to the
     number of points.
   - Each point becomes a finding `### U<k>-<j> · feedback` with `Status: open`. Evidence is the
@@ -519,9 +543,11 @@ task whose scout could not fit the ground it had to cover.
     `none given`. Fix and Ruling are empty.
   - `## For the PR` is one line saying how many points this round raised.
 
-  Log a `feedback` row in that task's `log.md`, committing the file with it, and start a
+  Log a `feedback` row in that task's `log.md`, committing the restored files and the
+  feedback file with it (`--with docs/tasks/<feature>`), and start a
   feedback fix: a fix with this file, then validation, then the pull request, titled as the
-  task's was with `, feedback <k>` after it. When it is merged, go to "The review".
+  task's was with `, feedback <k>` after it. When it is merged, go to "The review", which
+  cleans the restored files away again.
 - **A ruling on a disputed or declined finding.** If it asks for a change, it is feedback.
   Otherwise there is nothing to do: the finding stands as the feature pull request shows it.
 - **Anything else.** Answer it. The loop does not advance.
@@ -552,5 +578,6 @@ header, using Edit on those lines.
 | "These calls are independent, I'll batch them" | Not a row and the dispatch it routes to. The dispatch waits for the row's commit. |
 | "The implementer handed back `(waiting)`, I'll dispatch it again" | It is still running until its completion notification. Wait for that, then ask it with SendMessage. |
 | "The pull request is open, I'll wait for the human to merge it" | Merge it and start the next task. The human reviews the feature branch, once, at the end. |
+| "The human has not reviewed yet, I'll leave the run files for them" | Clean up, then mark the pull request ready. What they need from a run is in its comment, and every removed file is still at the cleanup's starting commit. |
 | "This task has a disputed finding, I'll stop for a ruling" | Merge and go on. It is in the task's comment on the feature pull request, for the review. |
 | "The finding contradicts the task file, I'll skip it" | The implementer declines it, quoting the task file. A V or A decline is ruled on by the next round of its stage. An R or U decline goes to the human in the pull request. |

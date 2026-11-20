@@ -353,6 +353,12 @@ def test_cleanup_keeps_logs_and_folds_stats(repo):
     again = loop(repo, 'cleanup', f).stdout
     assert 'removed 0 run and plan files, folded 1 stats totals, kept 1 fixed findings' in again
     assert git(repo, 'status', '--porcelain') == ''  # a second run keeps what the first folded
+    # A feedback round restores task 01's run files: its new total replaces the old one.
+    git(repo, 'checkout', '-q', 'HEAD^', '--', f'{f}/runs/01')
+    write(repo, f'{f}/runs/01/stats.md', 'header\n| 01 | 12 | 40k | 260k | 0 | 41 | 61 |\n')
+    loop(repo, 'commit', 'docs: feedback', f)
+    assert 'folded 1 stats totals, kept 1 fixed findings' in loop(repo, 'cleanup', f).stdout
+    assert open(os.path.join(repo, f'{f}/runs/stats.md')).read().endswith('---|\n| 01 | 12 | 40k | 260k | 0 | 41 | 61 |\n')
 
 
 # section and ids
