@@ -7,6 +7,7 @@
     python3 <plugin root>/loop/_lib/loop.py plan-gate <feature>
     python3 <plugin root>/loop/_lib/loop.py find-task <feature>
     python3 <plugin root>/loop/_lib/loop.py start <feature> <NN> <task branch>
+    python3 <plugin root>/loop/_lib/loop.py row <run dir> <stage> <agent> '<result>' [--check <file>] [--file <name>] [--usage '<context> <tools> <min>'] [--with <path>...]
     python3 <plugin root>/loop/_lib/loop.py pr-body <feature> <NN>
     python3 <plugin root>/loop/_lib/loop.py cleanup <feature>
     python3 <plugin root>/loop/_lib/loop.py section <file>... -H '<heading>'... [--bare] [--subheads] [--preamble]
@@ -45,9 +46,16 @@ start cuts the task branch from HEAD, writes `runs/<NN>/log.md` with row 0 and c
 The skills, agents and scripts come from the plugin, so every agent runs the copy the session
 loaded. When the task branch's copy of the project's own loop files (TOOLING) differs from
 master's, row 0's commit takes master's.
-pr-body writes `runs/<NN>/pr-body.md` from the run files without anyone reading them.
-cleanup removes every run file but each `log.md`, prunes the atlas, folds every `stats.md`
-total into `runs/stats.md`, and stages it all. It commits nothing. It names every task with a
+row appends the next whole-numbered row to `<run dir>/log.md` and commits it, with any --with
+paths, as `docs(<feature>): loop task <NN> row <#>`. --check first reads that file's header,
+fails without writing a row when it is missing or invalid, and prints it to route on.
+pr-body writes `runs/<NN>/pr-body.md` from the run files without anyone reading them. A
+task's pictures never reach a branch: it commits `runs/<NN>/shots` to
+`refs/loop-shots/<feature>`, pushes that ref and links the pictures at that commit.
+cleanup removes every run file but each `log.md`, the task files, and the plan's drafts,
+evaluation, PLAN.md, readiness and grill files, prunes the atlas, folds every `stats.md` total into `runs/stats.md`,
+every finding that led to a fix into `runs/findings.md` and every `- ` line of a task's
+`snags.md` into `runs/snags.md`, and stages it all. It commits nothing. It names every task with a
 log but no stats total, so the feature's totals never come out short without saying so.
 section prints the `## ` sections with these exact headings, each under its heading line, or
 without it with --bare. --subheads keeps only their `### ` lines, --preamble adds what comes
@@ -56,8 +64,10 @@ findings prints the ids of the findings with one of these statuses (open or reop
 --status says otherwise) and, with --owner, that Owner, and with --label, that label after the
 id's dot; their `### ` lines with --titles; or how many there are with --count.
 readiness-set prints the task files the next readiness round reviews: every task without a
-READY readiness file, and every task whose file, a neighbour's (Depends on or Blocks, either
-way) or 00-overview.md changed since the `Commit:` its readiness file reviewed.
+READY readiness file, every task whose own file changed since the `Commit:` its readiness
+file reviewed, and every task `--applies '<NN, NN>'` names (`all` for every task): the tasks
+the cutter says its change reaches without editing them. A change to 00-overview.md or to a
+neighbour sends no task back by itself.
 round-plan tells a validation round what it may carry instead of running again. `gates:` is
 `all`, `tsc lint` when only validation scripts changed since the last round, or `carried <k>`
 when nothing outside docs and .claude did. `regression:` is `due`, or `carried <k>` when round
@@ -65,7 +75,9 @@ k ran the whole suite green and nothing outside docs, .claude and tests/validati
 since.
 carry prints `carry <n>` when the latest validation passed at the current last code commit and
 a round at that same code ran the regression suite green, so a final validation would only
-repeat it. Otherwise it prints `validate:` and why.
+repeat it. Whole comment lines changed since then (`// …`, or a `/* … */` or JSX `{/* … */}`
+on one line) do not count as a change, so a review fix that only rewrote comments carries.
+Otherwise it prints `validate:` and why.
 inert lists every changed line under src since the base commit that is not a comment or blank,
 folding a deleted `export` declaration into one `deleted export <name>` line, then a count.
 baseline prints the jest and tsc gate lines of an evidence file whose Commit is the last code
@@ -91,6 +103,8 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ATLAS_PY = os.path.join(HERE, '..', 'feature-loop', 'atlas.py')
 # The project's files the loop's agents run from the worktree. `start` syncs them from master.
+# What planning leaves that nothing reads once the tasks are built. `cleanup` removes them.
+PLAN_DRAFTS = ['plans', 'readiness', 'grill', 'EVALUATION.md', 'PLAN.md', 'plan-pr-body.md']
 TOOLING = ['tests/validation/README.md', 'playwright.validation.config.ts']
 NOT_CODE = [':!docs', ':!.claude']
 OPEN = re.compile(r'^Status: (open|reopened)$')
@@ -255,6 +269,51 @@ def cmd_start(a):
     print(git('log', '-1', '--format=%h %s'))
 
 
+REPORTS = {'Validation', 'Architecture', 'Review', 'Feedback'}
+HEADERS = {'Survey': ['Base', 'Anchors'], 'Evidence': ['Commit', 'Items'],
+           'Brief': ['Task file', 'Base', 'Counts', 'PR title'],
+           **{k: ['Commit', 'Verdict', 'Blocking', 'Disputed', 'Repeat'] for k in REPORTS}}
+
+
+def header(path):
+    """The header lines of a handoff file, or Fail saying what is wrong with them."""
+    if not os.path.exists(path):
+        raise Fail(f'{path} does not exist.')
+    lines = read(path).splitlines()
+    kind = lines[0][2:].split(' ')[0].rstrip(':') if lines and lines[0].startswith('# ') else ''
+    keys = HEADERS.get(kind)
+    if not keys:
+        raise Fail(f'{path} does not open with a handoff header.')
+    head = lines[:len(keys) + 1]
+    if [l.split(':')[0] for l in head[1:]] != keys:
+        raise Fail(f'{path} header is not {", ".join(keys)}, in that order.')
+    if kind in REPORTS:
+        verdict, blocking = (l.split(':', 1)[1].strip() for l in head[2:4])
+        if (verdict in ('PASS', 'APPROVED', 'CLEAN')) != (blocking == '0'):
+            raise Fail(f'{path} says {verdict} with Blocking {blocking}.')
+        found = sum(fields.get('Status') in ('open', 'reopened') for _, fields in findings(path))
+        if str(found) != blocking:
+            raise Fail(f'{path} says Blocking {blocking} and has {found} open or reopened findings.')
+    return head
+
+
+def cmd_row(a):
+    trailer = attribution('commit')
+    head = header(a.check) if a.check else []
+    log = f'{a.run_dir}/log.md'
+    d = os.path.normpath(a.run_dir).split(os.sep)
+    numbers = re.findall(r'^\| (\d+) \|', read(log), re.M)
+    n = int(numbers[-1]) + 1
+    code = git('log', '-1', '--format=%h', '--', '.', ':!docs/tasks', ':!tests/validation')
+    cells = [n, a.stage, a.agent, code, a.result, a.file or '', *(a.usage.split() + ['', '', ''])[:3]]
+    with open(log, 'a') as f:
+        f.write('|' + '|'.join(f' {str(c).replace("|", "/")} ' if c != '' else ' ' for c in cells) + '|\n')
+    paths = [log, *a.paths]
+    git('add', '--', *paths)
+    git('commit', '-q', '-m', f'docs({d[-3]}): loop task {d[-1]} row {n}\n\n{trailer}', '--', *paths)
+    print('\n'.join([*head, git('log', '-1', '--format=%h %s')]))
+
+
 # The pull request and the cleanup
 
 def sections(text, headings, bare):
@@ -298,6 +357,25 @@ def matching(paths, status):
             for h, fields in findings(p) if fields.get('Status') == status]
 
 
+def push_shots(name, d):
+    """Commit the pictures in <d> to refs/loop-shots/<feature>, which no clone or fetch
+    downloads and no branch ever merges, push it, and return the commit the PR links."""
+    ref = f'refs/loop-shots/{name}'
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {**os.environ, 'GIT_INDEX_FILE': os.path.join(tmp, 'index')}
+        subprocess.run(['git', 'add', '-f', '--', d], env=env, check=True, capture_output=True)
+        tree = subprocess.run(['git', 'write-tree'], env=env, check=True, capture_output=True,
+                              text=True).stdout.strip()
+    run('git', 'fetch', '-q', 'origin', f'+{ref}:{ref}', check=False)
+    parent = run('git', 'rev-parse', '-q', '--verify', ref, check=False).stdout.strip()
+    if parent and git('rev-parse', f'{parent}^{{tree}}') == tree:
+        return parent
+    sha = git('commit-tree', tree, *(['-p', parent] if parent else []), '-m', f'shots: {d}')
+    git('update-ref', ref, sha)
+    git('push', '-q', 'origin', f'{sha}:{ref}')
+    return sha
+
+
 def cmd_pr_body(a):
     name, f = feature_name(a.feature), feature_dir(a.feature)
     d = f'{f}/runs/{a.task}'
@@ -311,7 +389,7 @@ def cmd_pr_body(a):
            '', '## Validation', for_the_pr(validation)]
     shots = f'{d}/shots/shots.md'
     if os.path.exists(shots):
-        sha = git('log', '-1', '--format=%H', '--', f'{d}/shots')
+        sha = push_shots(name, f'{d}/shots')
         repo = run('gh', 'repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner').stdout.strip()
         url = f'https://github.com/{repo}/blob/{sha}/{d}/shots'
         rows = [re.sub(r'\]\((before|after|diff)/([^)]*)\)', lambda m: f']({url}/{m.group(1)}/{m.group(2)}?raw=true)', l)
@@ -330,14 +408,40 @@ def cmd_pr_body(a):
     print(f'{d}/pr-body.md: {len(disputed)} disputed')
 
 
+def rows(path):
+    """The table rows an earlier cleanup folded into <path>, so a second run keeps them."""
+    return ([l for l in read(path).splitlines() if l.startswith('| ') and not l.startswith('| Task')]
+            if os.path.exists(path) else [])
+
+
 def cmd_cleanup(a):
     name, f = feature_name(a.feature), feature_dir(a.feature)
+    kept = (f'{f}/runs/stats.md', f'{f}/runs/findings.md', f'{f}/runs/snags.md')
     totals = [read(s).rstrip('\n').splitlines()[-1] for s in sorted(glob.glob(f'{f}/runs/*/stats.md'))
               if read(s).strip()]
     folded = {t.split('|')[1].strip() for t in totals if t.startswith('|')}
     missing = sorted(os.path.basename(os.path.dirname(p)) for p in glob.glob(f'{f}/runs/*/log.md')
                      if os.path.basename(os.path.dirname(p)) not in folded)
-    doomed = [p for p in git('ls-files', '--', f'{f}/runs').splitlines() if not p.endswith('/log.md')]
+    # Every finding that led to a fix, one line each: what the gates changed, for tuning the loop.
+    fixed = [f'| {os.path.basename(d.rstrip("/"))} | {h[4:]} | {fields["Fix"]} |'
+             for d in sorted(glob.glob(f'{f}/runs/*/'))
+             for p in dict.fromkeys([latest(d, 'validation'), latest(d, 'architecture'), f'{d}review-1.md',
+                                     *sorted(glob.glob(f'{d}feedback-*.md'))])
+             if p and os.path.exists(p)
+             for h, fields in findings(p) if fields.get('Fix') and not fields['Fix'].startswith('Declined')]
+    # A feedback round after a cleanup restores a task's run files, so a later cleanup meets
+    # that task again: its new total replaces the old one, and a finding is kept once.
+    totals = list({t.split('|')[1].strip() if '|' in t else t: t for t in rows(kept[0]) + totals}.values())
+    fixed = list(dict.fromkeys(rows(kept[1]) + fixed))
+    # What cost each task a retry or a round without being about its code, for tuning the loop.
+    snags = [f'| {os.path.basename(os.path.dirname(p))} | {l[2:].strip()} |'
+             for p in sorted(glob.glob(f'{f}/runs/*/snags.md'))
+             for l in read(p).splitlines() if l.startswith('- ')]
+    snags = list(dict.fromkeys(rows(kept[2]) + snags))
+    doomed = [p for p in git('ls-files', '--', f'{f}/runs').splitlines()
+              if not p.endswith('/log.md') and p not in kept]
+    doomed += git('ls-files', '--', *(f'{f}/{p}' for p in PLAN_DRAFTS)).splitlines()
+    doomed += [p for p in git('ls-files', '--', f'{f}/*.md').splitlines() if TASK.match(os.path.basename(p))]
     if doomed:
         git('rm', '-q', '--', *doomed)
     run(sys.executable, ATLAS_PY, 'prune', 'HEAD', '--stale')
@@ -351,7 +455,15 @@ def cmd_cleanup(a):
             '| Task | Runs | Largest context | Total context | Over 50k | Active min | Wall min |',
             '|---|---|---|---|---|---|---|', *totals]) + '\n')
         git('add', '--', f'{f}/runs/stats.md')
-    print(f'removed {len(doomed)} run files, folded {len(totals)} stats totals')
+    if fixed:
+        write(f'{f}/runs/findings.md', '\n'.join([
+            f'# {name}: findings that were fixed', '', '| Task | Finding | Fix |', '|---|---|---|', *fixed]) + '\n')
+        git('add', '--', f'{f}/runs/findings.md')
+    if snags:
+        write(f'{f}/runs/snags.md', '\n'.join([
+            f'# {name}: snags', '', '| Task | Snag |', '|---|---|', *snags]) + '\n')
+        git('add', '--', f'{f}/runs/snags.md')
+    print(f'removed {len(doomed)} run and plan files, folded {len(totals)} stats totals, kept {len(fixed)} fixed findings, {len(snags)} snags')
     if missing:
         print(f'no stats total for task {", ".join(missing)}: fold it in by hand from run-stats.py')
 
@@ -405,21 +517,17 @@ TASK = re.compile(r'^(?!00-)(\d\d[a-z]?)-.*\.md$')
 def cmd_readiness_set(a):
     d = feature_dir(a.feature)
     tasks = {m.group(1): f'{d}/{f}' for f in sorted(os.listdir(d)) if (m := TASK.match(f))}
-    near = {nn: {nn} for nn in tasks}
-    for nn, path in tasks.items():
-        # From the header's `Depends on <tasks>. Blocks <tasks>.` to the paragraph's end: it may wrap.
-        m = re.search(r'Depends on.*?(?:\n\n|\Z)', read(path), re.S)
-        for other in re.findall(r'\b(\d\d[a-z]?)\b', m.group(0) if m else ''):
-            if other in tasks:
-                near[nn].add(other)
-                near[other].add(nn)
+    # The cutter's `Applies to:` line: the tasks a change reaches without editing their file.
+    applies = set(tasks) if a.applies.strip() == 'all' else set(re.findall(r'\d\d[a-z]?', a.applies))
+    if applies - set(tasks):
+        raise Fail(f'--applies names no task file: {", ".join(sorted(applies - set(tasks)))}.')
     for nn, path in tasks.items():
         ready = f'{d}/readiness/{nn}.md'
         head = read(ready).splitlines()[:6] if os.path.exists(ready) else []
         commit = next((l.split(': ', 1)[1] for l in head if l.startswith('Commit: ')), '')
-        watched = [f'{d}/00-overview.md', *(tasks[o] for o in sorted(near[nn]))]
-        diff = run('git', 'diff', '--name-only', commit, '--', *watched, check=False)
-        if 'Verdict: READY' not in head or not commit or diff.returncode or diff.stdout.strip():
+        diff = run('git', 'diff', '--name-only', commit, '--', path, check=False)
+        if ('Verdict: READY' not in head or not commit or diff.returncode or diff.stdout.strip()
+                or nn in applies):
             print(path)
 
 
@@ -477,15 +585,31 @@ def cmd_carry(a):
     header = read(path).splitlines()[:6]
     commit = next((l.split(':', 1)[1].strip() for l in header if l.startswith('Commit:')), '')
     green = green_regression(a.run_dir)
+    code = run('git', 'diff', '--quiet', commit, 'HEAD', '--', '.', ':!docs/tasks', ':!tests/validation',
+               check=False).returncode != 0
     if 'Verdict: PASS' not in header:
         print(f'validate: validation {n} did not pass')
-    elif run('git', 'diff', '--quiet', commit, 'HEAD', '--', '.', ':!docs/tasks', ':!tests/validation',
-             check=False).returncode != 0:
+    elif code and not comments_only(commit, ':!docs/tasks', ':!tests/validation'):
         print(f'validate: code changed since validation {n} at {commit}')
-    elif not green or changed(green[1], ':!tests/validation'):
+    elif not green or not comments_only(green[1], ':!tests/validation'):
         print(f'validate: no green regression run at {commit}')
     else:
-        print(f'carry {n}')
+        print(f'carry {n}' + (', only comment lines changed since' if code else ''))
+
+
+# A whole line that is one comment: `// …`, or a `/* … */` or JSX `{/* … */}` that opens and
+# closes on it. A directive is code, and so is a block comment that spans lines.
+LINE_COMMENT = re.compile(r'^\s*((?!.*(@ts-|eslint|prettier|istanbul|jest-))'
+                          r'(//|/\*((?!\*/).)*\*/\s*$|\{/\*((?!\*/).)*\*/\}\s*$)|$)')
+NOT_LINES = ('Binary files', 'rename ', 'old mode', 'new file', 'deleted file')
+
+
+def comments_only(since, *exclude):
+    """True when nothing outside docs changed since <since> but whole comment lines."""
+    # shortcut: a comment-shaped line inside a template literal or JSX text counts as a comment; parse the file if that ever bites.
+    lines = git('diff', '-U0', since, 'HEAD', '--', '.', *NOT_CODE, *exclude).splitlines()
+    return not any(l.startswith(NOT_LINES) or (l[:1] in ('+', '-') and not l.startswith(('+++ ', '--- '))
+                                               and not LINE_COMMENT.match(l[1:])) for l in lines)
 
 
 COMMENT = re.compile(r'^\s*(//|/\*|\*|\{/\*|$)')
@@ -603,6 +727,13 @@ def main(argv=None):
     s.add_argument('feature')
     s.add_argument('task')
     s.add_argument('branch')
+    s = sub.add_parser('row')
+    for arg in ('run_dir', 'stage', 'agent', 'result'):
+        s.add_argument(arg)
+    s.add_argument('--check')
+    s.add_argument('--file')
+    s.add_argument('--usage', default='')
+    s.add_argument('--with', dest='paths', nargs='*', default=[])
     for c in ('round-plan', 'carry'):
         sub.add_parser(c).add_argument('run_dir')
     sub.add_parser('inert').add_argument('base')
@@ -625,7 +756,9 @@ def main(argv=None):
     s.add_argument('--label')
     s.add_argument('--titles', action='store_true')
     s.add_argument('--count', action='store_true')
-    sub.add_parser('readiness-set').add_argument('feature')
+    s = sub.add_parser('readiness-set')
+    s.add_argument('feature')
+    s.add_argument('--applies', default='')
     s = sub.add_parser('run')
     s.add_argument('name')
     s.add_argument('--grep')

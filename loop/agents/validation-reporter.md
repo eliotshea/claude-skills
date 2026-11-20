@@ -19,8 +19,12 @@ run dir, base commit, evidence file, previous validation file or none, script di
 `VALIDATION_PORT`. When the evidence's Notes name a different port the runner moved to, use
 that one.
 
-Read `${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/handoff-format.md` for the finding format, the statuses and
-who rules on what. When the evidence has a `## Views` section, read its `shots.md` too, and
+The finding format, the statuses and who rules on what are five sections of
+handoff-format.md. Read those, not the file:
+
+    python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py section ${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/handoff-format.md -H Commands -H 'The report header' -H 'A finding' -H Status -H 'For the PR'
+
+When the evidence has a `## Views` section, read its `shots.md` too, and
 judge the views as "Views" below says. Then the evidence file, then the task file's numbered criteria and its
 "How to validate" steps. The evidence file carries the Baseline, so you never open the brief.
 
@@ -57,6 +61,9 @@ still cannot tell after a rerun, that item is `unverified` and it gets a finding
    pass an item no test covers. That item is `unverified` and gets a finding.
 4. An item the runner recorded as `not run` is `unverified` and gets a finding, whatever the
    reason was. Nothing passes because nobody looked.
+   An item recorded as `manual` that the task file does not hand to the owner by name is the
+   same: `unverified`, with a `tooling` finding whose Expected quotes the step, so the next
+   runner runs it.
 5. The runner's own reading of the code is evidence like any other. When it says the app is
    wrong, check that the quoted line says so before you raise the finding.
 6. **Label the cause.** A finding whose cause is the validator's own script or one of the

@@ -120,6 +120,9 @@ def main():
 
     head = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], capture_output=True,
                           text=True).stdout.strip()
+    # Pictures stay out of every branch: `loop.py pr-body` pushes them to a ref of their own.
+    with open(os.path.join(out, '.gitignore'), 'w') as f:
+        f.write('*\n')
     with open(os.path.join(out, 'shots.md'), 'w') as f:
         f.write(f'# Shots: {spec}\n\nBefore: {base}. After: {head}. Logs: {logs}\n\n'
                 '| View | Result | Before | After | Diff |\n|---|---|---|---|---|\n')

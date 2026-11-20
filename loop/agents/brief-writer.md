@@ -152,8 +152,9 @@ orchestrator sees the file is finished, and `Counts:` is the line it logs.
     `script, base`: the validator measures it at the base before it compares. For a script,
     list the fixtures and known locators it can use. Where the survey shows none, the row reads `script (locators to discover)` and gets a
     trap naming the file to snapshot, because a locator you invent becomes a script that fails
-    on its first run. Manual is for what a machine cannot observe: how audio sounds, a phone in
-    a hand, a human's sense of feel.
+    on its first run. Manual is only for a step the task file itself hands to the owner by
+    name, which a task cut by the current plan never has. An agent browser check is `script`,
+    however long it runs.
 
     ## Traps
     What will cost a cycle if missed, each with its file: a wrong anchor the task relies on, a

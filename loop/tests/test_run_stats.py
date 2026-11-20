@@ -235,6 +235,18 @@ def test_cli_prints_both_tables(repo, home):
     ]
 
 
+def test_cli_counts_the_task_orchestrator_in_the_total_but_not_in_the_size(repo, home):
+    sub = home.project / 's' / 'subagents'
+    write_run(sub, 'agent-a', 'eliot:task-orchestrator',
+              events(prompt('feat-a', '01', 'Mode: start'), minutes=(0, 5, 9), usage={'input_tokens': 90_000}))
+    # Agents it starts are nested under it.
+    write_run(sub / 'nested', 'agent-b', 'eliot:task-scout', events(prompt('feat-a', '01'), minutes=(1, 3)))
+    rows = table_rows(run(repo, home, 'feat-a').stdout)
+    assert rows == ['| 01 | task-orchestrator | start | 90k | 2 | 0 | 9 | 9 |  |',
+                    '| 01 | task-scout |  | 21k | 1 | 0 | 2 | 2 |  |',
+                    '| 01 | 2 | 21k task-scout | 111k | 0 | 2 | 2 |']
+
+
 def test_cli_filters_to_one_task(repo, home):
     sub = home.project / 's' / 'subagents'
     write_run(sub, 'agent-a', 'task-scout', events(prompt('feat-a', '01')))
@@ -280,3 +292,22 @@ def test_cli_ignores_transcripts_outside_subagents(repo, home):
     write_run(home.project / 's', 'agent-a', 'task-scout', events(prompt()))
     write_run(home.project, 'agent-b', 'task-scout', events(prompt()))
     assert run(repo, home, 'feat-a').returncode == 1
+
+
+def test_cli_counts_the_orchestrators_turns_for_the_task_its_calls_name(repo, home):
+    write_run(home.project / 's' / 'subagents', 'agent-a', 'task-scout', events(prompt()))
+
+    def turn(i, name, text):
+        return {'type': 'assistant', 'timestamp': stamp(i),
+                'message': {'id': f'm{i}', 'usage': {'input_tokens': 70_000 + i},
+                            'content': [{'type': 'tool_use', 'name': name, 'input': {'x': text}}]}}
+    main = [turn(0, 'Bash', 'git fetch origin'),  # before any task is named: not counted
+            turn(1, 'Agent', prompt('feat-a', '01')),
+            turn(2, 'Bash', 'loop.py row docs/tasks/feat-a/runs/01 survey'),
+            turn(3, 'Bash', 'head docs/tasks/feat-a/00-overview.md'),
+            turn(4, 'Agent', prompt('other', '09'))]
+    (home.project / 'session.jsonl').write_text(''.join(json.dumps(e) + '\n' for e in main))
+    lines = run(repo, home, 'feat-a').stdout.splitlines()
+    at = lines.index('| Task | Orchestrator context | Turns | Tools | Turns per dispatch |')
+    assert lines[at + 2] == '| 01 | 70k | 3 | 3 | 3.0 |'  # the other feature's turn is not this task's
+    assert lines[-1].startswith('| 01 | 1 |')

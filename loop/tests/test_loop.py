@@ -193,6 +193,35 @@ def test_start_cuts_branch_and_commits_row_0(repo):
     assert log.endswith(f'| 0 | start | orchestrator | {base} | task branch created, loop tooling matches master | log.md | | | |\n')
 
 
+def test_row_checks_the_header_then_appends_and_commits(repo):
+    attributed(repo)
+    run_dir = f'docs/tasks/{FEATURE}/runs/02'
+    loop(repo, 'start', f'docs/tasks/{FEATURE}', '02', f'{FEATURE}-task-02')
+    base = git(repo, 'rev-parse', '--short', 'origin/master')
+    write(repo, f'{run_dir}/validation-1.md',
+          '# Validation 1: task 02\nCommit: x\nVerdict: PASS\nBlocking: 2\nDisputed: 0\nRepeat: none\n')
+    bad = loop(repo, 'row', run_dir, 'validation 1 report', 'validation-reporter', 'PASS',
+               '--check', f'{run_dir}/validation-1.md', check=False)
+    assert bad.returncode == 1 and 'PASS with Blocking 2' in bad.stderr
+    blocked = '# Validation 1: task 02\nCommit: x\nVerdict: BLOCKED\nBlocking: 2\nDisputed: 0\nRepeat: none\n'
+    write(repo, f'{run_dir}/validation-1.md', blocked + '\n### V1-1 · gate\nStatus: open\n')
+    bad = loop(repo, 'row', run_dir, 'validation 1 report', 'validation-reporter', 'BLOCKED',
+               '--check', f'{run_dir}/validation-1.md', check=False)
+    assert bad.returncode == 1 and 'Blocking 2 and has 1 open' in bad.stderr
+    write(repo, f'{run_dir}/validation-1.md',
+          blocked + '\n### V1-1 · gate\nStatus: open\n### V1-2 · gate\nStatus: reopened\n### V1-3 · gate\nStatus: fixed\n')
+    out = loop(repo, 'row', run_dir, 'validation 1 report', 'validation-reporter', 'BLOCKED, 2 blocking',
+               '--check', f'{run_dir}/validation-1.md', '--file', 'validation-1.md', '--usage', '34k 9 2').stdout
+    assert out.startswith('# Validation 1: task 02\nCommit: x\nVerdict: BLOCKED\n')
+    assert out.endswith(f'docs({FEATURE}): loop task 02 row 1\n')
+    log = open(os.path.join(repo, f'{run_dir}/log.md')).read()
+    assert log.endswith(f'| 1 | validation 1 report | validation-reporter | {base} | BLOCKED, 2 blocking | validation-1.md | 34k | 9 | 2 |\n')
+    assert log.count('\n| ') == 3  # the refused row was never written
+    loop(repo, 'row', run_dir, 'escalated', 'orchestrator', 'cap reached')
+    assert open(os.path.join(repo, f'{run_dir}/log.md')).read().endswith('| 2 | escalated | orchestrator | ' + base + ' | cap reached | | | | |\n')
+    assert git(repo, 'status', '--porcelain') == '?? ' + f'{run_dir}/validation-1.md'
+
+
 def test_start_syncs_tooling_that_differs_from_master(repo):
     attributed(repo)
     write(repo, 'tests/validation/README.md', 'gone on master\n')
@@ -265,9 +294,15 @@ def test_pr_body_style_only_shots_and_no_disputes(repo):
     write(repo, f'{RUN}/validation-1.md', report('Validation', 1, '## For the PR\nV\n'))
     write(repo, f'{RUN}/review-1.md', report('Review', 1, '## For the PR\nR\n'))
     write(repo, f'{RUN}/shots/shots.md', '# Shots\n| c1 | ![b](before/a.png) | ![a](after/a.png) |\n')
-    loop(repo, 'commit', 'docs: shots', f'{RUN}/shots')
-    sha = git(repo, 'rev-parse', 'HEAD')
+    write(repo, f'{RUN}/shots/before/a.png', 'png')
+    write(repo, f'{RUN}/shots/.gitignore', '*\n')  # as shots.py leaves it: no branch carries pictures
     loop(repo, 'pr-body', FEATURE, '04')
+    sha = git(repo, 'ls-remote', 'origin', f'refs/loop-shots/{FEATURE}').split()[0]
+    assert git(repo, 'ls-tree', '-r', '--name-only', sha).splitlines() == [
+        f'{RUN}/shots/.gitignore', f'{RUN}/shots/before/a.png', f'{RUN}/shots/shots.md']
+    assert 'shots' not in git(repo, 'status', '--porcelain', '--', f'{RUN}/shots')
+    loop(repo, 'pr-body', FEATURE, '04')  # unchanged pictures push no second commit
+    assert git(repo, 'ls-remote', 'origin', f'refs/loop-shots/{FEATURE}').split()[0] == sha
     body = open(os.path.join(repo, f'{RUN}/pr-body.md')).read()
     assert '## Design review\nSkipped: style or chore only.' in body
     assert '## Disputed, for you to settle\nNone.' in body
@@ -290,18 +325,44 @@ def test_cleanup_keeps_logs_and_folds_stats(repo):
     write(repo, f'{f}/runs/01/log.md', 'log 1\n')
     write(repo, f'{f}/runs/01/brief.md', 'brief\n')
     write(repo, f'{f}/runs/01/stats.md', 'header\n| 01 | 9 | 40k | 200k | 0 | 30 | 50 |\n')
+    write(repo, f'{f}/runs/01/review-1.md', report('Review', 1, '### R1-1 · bug\nStatus: fixed\nFix: abc1234 clamps the end of the range\n'
+                                                           '### R1-2 · nit\nStatus: declined\nFix: Declined: out of the diff surface\n'))
+    write(repo, f'{f}/runs/01/snags.md', '- carry printed validate after a JSX comment fix, row 8, one round\n')
     write(repo, f'{f}/runs/02/log.md', 'log 2\n')
     write(repo, f'{f}/runs/02/shots/before/x.png', 'png')
+    for kept in ('plan-log.md', 'DECISIONS.md', '00-overview.md'):
+        write(repo, f'{f}/{kept}', 'kept\n')
+    for gone in ('PLAN.md', 'EVALUATION.md', 'plans/PLAN-A.md', 'readiness/01.md', 'grill/spec.md'):
+        write(repo, f'{f}/{gone}', 'gone\n')
     loop(repo, 'commit', 'docs: runs', f)
     out = loop(repo, 'cleanup', f).stdout
-    assert 'removed 3 run files, folded 1 stats totals' in out
+    assert 'removed 11 run and plan files, folded 1 stats totals, kept 1 fixed findings, 1 snags' in out
     assert 'no stats total for task 02' in out
     staged = git(repo, 'diff', '--cached', '--name-status').splitlines()
     assert sorted(staged) == sorted([f'D\t{f}/runs/01/brief.md', f'D\t{f}/runs/01/stats.md',
-                                     f'A\t{f}/runs/stats.md', f'D\t{f}/runs/02/shots/before/x.png'])
+                                     f'D\t{f}/runs/01/review-1.md', f'A\t{f}/runs/findings.md',
+                                     f'D\t{f}/runs/01/snags.md', f'A\t{f}/runs/snags.md',
+                                     f'A\t{f}/runs/stats.md', f'D\t{f}/runs/02/shots/before/x.png',
+                                     f'D\t{f}/01-a.md',
+                                     *(f'D\t{f}/{gone}' for gone in ('PLAN.md', 'EVALUATION.md', 'plans/PLAN-A.md',
+                                                                    'readiness/01.md', 'grill/spec.md'))])
+    kept = open(os.path.join(repo, f'{f}/runs/findings.md')).read()
+    assert kept.endswith('|---|---|---|\n| 01 | R1-1 · bug | abc1234 clamps the end of the range |\n')
+    assert open(os.path.join(repo, f'{f}/runs/snags.md')).read().endswith(
+        '|---|---|\n| 01 | carry printed validate after a JSX comment fix, row 8, one round |\n')
     stats = open(os.path.join(repo, f'{f}/runs/stats.md')).read()
     assert stats.startswith(f'# {FEATURE}: task sizes\n')
     assert stats.endswith('|---|---|---|---|---|---|---|\n| 01 | 9 | 40k | 200k | 0 | 30 | 50 |\n')
+    loop(repo, 'commit', 'docs: clean up')
+    again = loop(repo, 'cleanup', f).stdout
+    assert 'removed 0 run and plan files, folded 1 stats totals, kept 1 fixed findings, 1 snags' in again
+    assert git(repo, 'status', '--porcelain') == ''  # a second run keeps what the first folded
+    # A feedback round restores task 01's run files: its new total replaces the old one.
+    git(repo, 'checkout', '-q', 'HEAD^', '--', f'{f}/runs/01')
+    write(repo, f'{f}/runs/01/stats.md', 'header\n| 01 | 12 | 40k | 260k | 0 | 41 | 61 |\n')
+    loop(repo, 'commit', 'docs: feedback', f)
+    assert 'folded 1 stats totals, kept 1 fixed findings, 1 snags' in loop(repo, 'cleanup', f).stdout
+    assert open(os.path.join(repo, f'{f}/runs/stats.md')).read().endswith('---|\n| 01 | 12 | 40k | 260k | 0 | 41 | 61 |\n')
 
 
 # section and ids
@@ -402,7 +463,7 @@ def readiness(repo, nn, verdict, commit):
           'Blocking: 0\nOwner: 0\nRepeat: none\n')
 
 
-def test_readiness_set_reviews_changed_tasks_their_neighbours_and_the_unready(repo):
+def test_readiness_set_reviews_changed_tasks_named_tasks_and_the_unready(repo):
     d = f'docs/tasks/{FEATURE}'
     write(repo, f'{d}/00-overview.md', '# Overview\n')
     write(repo, f'{d}/01-a.md', '# Task 01: A\n\nPlan slice 1. Depends on none. Blocks 02.\n')
@@ -422,10 +483,16 @@ def test_readiness_set_reviews_changed_tasks_their_neighbours_and_the_unready(re
 
     write(repo, f'{d}/02-b.md', '# Task 02: B\n\nPlan slice 1. Depends on 01.\nBlocks none. Fixed.\n')
     git(repo, 'commit', '-qam', 'fix')
-    assert loop(repo, 'readiness-set', FEATURE).stdout == f'{d}/01-a.md\n{d}/02-b.md\n{d}/11b-e.md\n'
+    # 02 changed. Its neighbour 01 is reviewed again only when the cutter says the change reaches it.
+    assert loop(repo, 'readiness-set', FEATURE).stdout == f'{d}/02-b.md\n{d}/11b-e.md\n'
+    assert (loop(repo, 'readiness-set', FEATURE, '--applies', '01, 02').stdout
+            == f'{d}/01-a.md\n{d}/02-b.md\n{d}/11b-e.md\n')
 
+    # An overview change sends back the tasks it applies to, not the feature.
     write(repo, f'{d}/00-overview.md', '# Overview, fixed\n')
-    assert len(loop(repo, 'readiness-set', FEATURE).stdout.splitlines()) == 5
+    assert loop(repo, 'readiness-set', FEATURE, '--applies', '04').stdout == f'{d}/02-b.md\n{d}/04-d.md\n{d}/11b-e.md\n'
+    assert len(loop(repo, 'readiness-set', FEATURE, '--applies', 'all').stdout.splitlines()) == 5
+    assert 'names no task file: 09' in loop(repo, 'readiness-set', FEATURE, '--applies', '09', check=False).stderr
 
 
 # run
@@ -489,6 +556,36 @@ def test_carry_with_a_green_regression_at_the_current_code(repo):
     write(repo, 'tests/validation/feat-x/05.spec.ts', 'x\n')
     loop(repo, 'commit', 'test(validation): script', 'tests/validation')
     assert loop(repo, 'carry', CODE).stdout == 'carry 1\n'
+
+
+def test_carry_ignores_comment_lines_but_not_code_or_directives(repo):
+    attributed(repo)
+    write(repo, 'src/a.ts', '// old note\nexport const a = 1;\n')
+    loop(repo, 'commit', 'feat: a', 'src/a.ts')
+    evidence(repo, 1, '- regression: 116 passed of 116')
+    validation(repo, 1)
+    write(repo, 'src/a.ts', '// a clearer note\n\nexport const a = 1;\n')
+    loop(repo, 'commit', 'docs: nit', 'src/a.ts')
+    assert loop(repo, 'carry', CODE).stdout == 'carry 1, only comment lines changed since\n'
+    # A JSX or block comment that opens and closes on its line is a comment too.
+    write(repo, 'src/b.tsx', '<a>\n  {/* old */}\n  /* old */\n</a>\n')
+    loop(repo, 'commit', 'feat: b', 'src/b.tsx')
+    evidence(repo, 2, '- regression: 116 passed of 116')
+    validation(repo, 2)
+    write(repo, 'src/b.tsx', '<a>\n  {/* names both sizes (md: embed, lg: legacy) */}\n  /* new */\n</a>\n')
+    loop(repo, 'commit', 'docs: jsx nit', 'src/b.tsx')
+    assert loop(repo, 'carry', CODE).stdout == 'carry 2, only comment lines changed since\n'
+    for code in ('  {/* a */} <b />\n', '  /* a */ f(); /* b */\n', '  /* eslint-disable */\n', '  /* opens\n'):
+        write(repo, 'src/b.tsx', '<a>\n' + code + '</a>\n')
+        assert not loop(repo, 'commit', 'x', 'src/b.tsx').returncode
+        assert loop(repo, 'carry', CODE).stdout.startswith('validate: code changed'), code
+        git(repo, 'reset', '-q', '--hard', 'HEAD^')
+    write(repo, 'src/a.ts', '// a clearer note\n\n// @ts-expect-error\nexport const a = 1;\n')
+    loop(repo, 'commit', 'chore: directive', 'src/a.ts')
+    assert loop(repo, 'carry', CODE).stdout.startswith('validate: code changed')
+    write(repo, 'src/a.ts', '// a clearer note\n\nexport const a = 2;\n')
+    loop(repo, 'commit', 'fix: a', 'src/a.ts')
+    assert loop(repo, 'carry', CODE).stdout.startswith('validate: code changed')
 
 
 def test_carry_validates_without_a_regression_line(repo):

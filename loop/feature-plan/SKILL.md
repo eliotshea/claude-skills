@@ -9,7 +9,8 @@ argument-hint: <feature, e.g. issue-190-practice-log>
 
 You plan one feature for `/feature-loop`. The output is exactly what the loop reads:
 `00-overview.md`, `DECISIONS.md` and one file per task, with anchors that survive earlier
-tasks landing. Planning spans several sessions. `plan-log.md` is where each one picks up.
+tasks landing. Planning takes two sessions, one up to the spec PR and one from its merge to
+the plan PR. `plan-log.md` is where a session picks up.
 
 Arguments: `$ARGUMENTS`, the feature's name. It is both the directory under `docs/tasks/`
 and the feature branch, and starts `issue-<n>-`. If it does not, ask for the issue number.
@@ -19,19 +20,12 @@ this skill and its agents use. Every path is relative to the repository root.
 
 ## What a session does
 
-Each session does one of two things, decided by the next step after the log's last row:
+A session routes on the log's last row and keeps going, through owner steps (spec grill,
+design, decision grill) and agent steps alike, until it needs a merge only the owner can
+give: the spec PR or the plan PR. There it stops (see "Stopping"). The owner answers inside
+the session, in the grills, and never has to start one to move a step along.
 
-- **The next step needs the owner** (spec grill, design, decision grill). Run that step
-  yourself, in this session, and nothing else. It ends when the step's output is committed.
-- **The next step is agent work.** Route agents until the next step needs the owner or the
-  plan PR is open. Then stop and end with the next command in a fenced block (see "Stopping").
-
-Gate checks, branch cuts and log rows are bookkeeping, not steps. A session may do them and
-then run an owner step.
-
-A grill never runs in a session that has routed agents. It checks answers against the code,
-and code fills a router's window (G3). A subagent cannot ask the owner anything, so there is
-no griller agent.
+A subagent cannot ask the owner anything, so there is no griller agent: you run the grills.
 
 ```dot
 digraph feature_plan {
@@ -55,7 +49,7 @@ digraph feature_plan {
 }
 ```
 
-Bold boxes are owner sessions. Everything else is an agent you dispatch.
+Bold boxes are steps you run with the owner. Everything else is an agent you dispatch.
 
 ## Branches and worktrees
 
@@ -108,8 +102,9 @@ Every session pushes its branch before it ends.
    <feature>`, and open the draft PR, labelled `feature-branch`:
    `gh label create feature-branch --color 1D76DB --description "Feature branch PR into master"
    --force`, then `gh pr create --draft --base master --head <feature> --title "<type>(<scope>):
-   <issue title, lower case> (#<n>)" --label feature-branch --body "Feature branch for #<n>.
-   Planned with /feature-plan, built with /feature-loop."`. Take type and scope from `git log
+   <issue title, lower case> (#<n>)" --label feature-branch --body "Closes #<n>.
+   Planned with /feature-plan, built with /feature-loop."`. `Closes` is what closes the
+   issue when the owner merges the feature. Take type and scope from `git log
    --oneline -8` on master.
 3. **Spec branch.** In the same worktree, `git checkout -b <feature>-spec`. No other session
    can have this worktree open yet, so this one switch is safe. Put the draft PR's number in
@@ -131,7 +126,7 @@ sub-rows:
 | `design`, `started` | design, resumed |
 | `gate` with UI no, or `design`, `done` | draft |
 | `draft` | evaluate |
-| `evaluate` | decision grill. Stop. |
+| `evaluate` | decision grill |
 | `decision grill`, `started` | decision grill, resumed |
 | `decision grill`, `done`, no earlier `plan` row | plan |
 | `decision grill`, `done`, after a `readiness: owner questions` row | apply the decisions |
@@ -142,16 +137,13 @@ sub-rows:
 | `feedback` | apply the feedback |
 | `readiness <r>`, every task READY, and a `plan PR` row exists | update the plan PR |
 | `readiness <r>`, every task READY | plan PR |
-| `readiness <r>`, any Owner above 0 | log `readiness: owner questions`. Stop. |
-| `readiness <r>`, Blocking above 0, round 3 since the last decision grill or cut | log `readiness: owner questions`. Stop. |
-| `readiness <r>`, a Repeat id already repeated in an earlier round | log `readiness: owner questions`. Stop. |
+| `readiness <r>`, any Owner above 0 | log `readiness: owner questions` |
+| `readiness <r>`, Blocking above 0, round 3 since the last decision grill or cut | log `readiness: owner questions` |
+| `readiness <r>`, a Repeat id already repeated in an earlier round | log `readiness: owner questions` |
 | `readiness <r>`, Blocking above 0 | fix |
-| `readiness: owner questions` | decision grill. Stop if you have routed agents this session. |
+| `readiness: owner questions` | decision grill |
 | `plan PR #n`, or `plan PR updated` | the plan gate |
 | `stopped` | tell the owner what the row says, and wait |
-
-"Stop" means stop as in "Stopping". A row that routes to an owner step, reached in a session
-that has not dispatched an agent, runs that step here instead.
 
 ## The spec grill
 
@@ -206,7 +198,8 @@ so the plan is drawn from the design rather than patched by it.
    `docs/designs/embed-timeline-visual.md`: who chose what and when, the reference mockup, the
    idea, layout, then each surface. A choice that changes behaviour revises its T row in the
    spec, as plan-format.md says, and the visual spec lists those rows.
-6. Log `design | session | done, <n> mockups, chose <NN>`, committing everything. Push. Stop.
+6. Log `design | session | done, <n> mockups, chose <NN>`, committing everything. Push. Route
+   again.
 
 ## The decision grill
 
@@ -228,7 +221,7 @@ A session with the owner. Load the `eliot:grilling` skill and follow it, with "G
 5. **Reopened only.** On each finding the grill settled, set `Owner: cutter` and write
    `Ruling: Human: <the D id and one sentence>`, leaving the status as it is.
 6. Log `decision grill | session | done, <n> D, <n> E adopted, <n> T revised`, committing
-   every file with it. Push. Stop.
+   every file with it. Push. Route again.
 
 ## Grilling rules
 
@@ -243,7 +236,8 @@ On top of `/grilling`, in every grill:
   Any fresh session can then pick the grill up.
 - **After about twelve rounds, suggest a restart.** Restarting loses nothing because of the
   file. Say so, and end with the command.
-- **Code is fine here.** Nothing else happens in this session.
+- **Send an agent for a check that takes more than a few reads.** This window still has the
+  routing to do, and the agent hands back the lines that settle it.
 
 ## Dispatching
 
@@ -268,12 +262,17 @@ Use the Agent tool with the agent's `subagent_type`. Every prompt starts with:
 | apply the decisions, logged `decisions applied` | `eliot:task-cutter` | `Mode: decisions`, `Decisions: <new D and E ids>`, `Findings: <file>: <ids>` for each finding the grill ruled on |
 | apply the feedback, logged `feedback applied` | `eliot:task-cutter` | `Mode: feedback`, `Feedback: <file>` |
 
-Readiness rounds are numbered across the whole plan. A round reviews only the tasks this
-prints: every task without a READY readiness file, and every task whose file, a dependency's
-or a dependant's file, or `00-overview.md` changed since its last review. A task left out
-keeps its READY file from an earlier round, and the headers still sum over every file.
+Readiness rounds are numbered across the whole plan. A round reviews only the tasks a change
+applies to, which is what this prints: every task without a READY readiness file, every task
+whose own file changed since its last review, and every task the cutter's final message named
+in `Applies to:`. A change to `00-overview.md` or to a neighbouring task sends back only the
+tasks the cutter says it reaches. A task left out keeps its READY file from an earlier round,
+and the headers still sum over every file.
 
-    python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py readiness-set <feature>
+    python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py readiness-set <feature> --applies '<the cutter's Applies to list>'
+
+Leave `--applies` out after the cut and the reconcile, when no task is READY yet. After a
+resume, when the cutter's final message is no longer in your context, pass `--applies all`.
 
 Open finding ids, without opening a file:
 
@@ -289,7 +288,8 @@ After a step's agents return:
    - Plan: `head -4 PLAN.md`, and `grep -c '^### P[0-9]' DECISIONS.md` for the P count.
    - Overview: `grep -c '^## ' 00-overview.md` and a `## File map` heading.
    - Cut: every task in `Tasks:` has a file whose first line starts `# Task <NN>:`.
-   - Reconcile, fix, decisions, feedback: the cutter's final message has a `Files:` line.
+   - Reconcile, fix, decisions, feedback: the cutter's final message has a `Files:` line, and
+     all but reconcile an `Applies to:` line.
    - Readiness: `head -6 readiness/<NN>.md` is valid for this round (plan-format.md), for
      each task dispatched.
 2. **If a check fails,** dispatch that agent again with the same prompt plus
@@ -329,7 +329,8 @@ When every task is READY:
 3. Log `plan PR | router | plan PR #<n>`, commit, push. Stop: the PR URL, the task count, the
    largest scout estimate, and that merging it is the handoff to the loop.
 
-**Updating** after feedback: steps 1 and 2 with `gh pr edit <n> --body-file ...`, then a
+**Updating** after feedback: steps 1 and 2 with `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F
+body=@docs/tasks/<feature>/plan-pr-body.md`, then a
 `plan PR updated` row.
 
 ## The plan gate
@@ -340,7 +341,7 @@ On a `plan PR` row: `gh pr view <n> --json state -q .state`.
   fenced block.
 - **Open, with feedback from the owner.** A question only the owner can answer, or a change
   to a decision, is a reopened decision grill: log `readiness: owner questions` and run it
-  here if you have routed nothing. Anything else: write their words to
+  here. Anything else: write their words to
   `docs/tasks/<feature>/feedback-<k>.md`, log a `feedback` row with it, dispatch the cutter in
   mode feedback, then a readiness round, then update the PR.
 - **Open, nothing said.** Tell the owner it is waiting on them and stop.
@@ -363,16 +364,16 @@ A session may start with work in the tree that has no row. In the worktree:
 
 ## Stopping
 
-Every stop ends the same way: one line saying what the next session will do (grill the spec,
-design, grill the decisions, route agents, or nothing until the owner merges), then the
-command alone in a fenced block, because a fenced block gives the owner a copy button:
+A session stops in two places: the spec PR is open, or the plan PR is. Say in one line what
+the owner does next, then give the next command alone in a fenced block, because a fenced
+block gives the owner a copy button. After the spec PR:
 
     ```
     /feature-plan <feature>
     ```
 
-Nothing follows it. A session with the owner that finishes its step also stops this way, so
-each kind of work starts in a clean window.
+After the plan PR it is `/feature-loop docs/tasks/<feature>`, which checks the merge itself.
+Nothing follows the block.
 
 ## What you read, as router
 
@@ -383,7 +384,6 @@ each kind of work starts in a clean window.
 
 | Thought | Do this |
 |---|---|
-| "The next step is a grill, I'll run it here after routing" | Stop. A grill after routing starts in a window already full of other work (G3). |
 | "This readiness finding is a quick fix, I'll edit the task" | Dispatch the cutter. Your edit skips the next round's ruling. |
 | "I'll read PLAN.md to check the cut" | The readiness reviewers check the tasks. You route on headers. |
 | "The finding needs the owner, but I can guess" | `Owner: human` goes to the decision grill. Decisions have one home (G12). |

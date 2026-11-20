@@ -24,7 +24,7 @@ Your prompt gives the feature dir, task file, run dir, base branch and base comm
 1. `<feature dir>/00-overview.md`, all of it. Its rules are part of every task's contract, and
    your survey is the only place the writer sees them.
 2. `<feature dir>/DECISIONS.md`, if it exists: the index, then every decision the task cites.
-3. The task file, all of it.
+3. The task file, all of it, once. Reopening it is the commonest waste in a survey.
 4. The atlas. Earlier scouts left what they found in each file there, and it holds while the
    file is unchanged. Run `atlas.py list <base commit>` once, then `show` for every
    file the task cites and every neighbour in steps 6 and 7, as "The atlas" below says. A fresh
