@@ -72,8 +72,9 @@ k ran the whole suite green and nothing outside docs, .claude and tests/validati
 since.
 carry prints `carry <n>` when the latest validation passed at the current last code commit and
 a round at that same code ran the regression suite green, so a final validation would only
-repeat it. Whole `//` comment lines changed since then do not count as a change, so a review
-fix that only rewrote comments carries. Otherwise it prints `validate:` and why.
+repeat it. Whole comment lines changed since then (`// …`, or a `/* … */` or JSX `{/* … */}`
+on one line) do not count as a change, so a review fix that only rewrote comments carries.
+Otherwise it prints `validate:` and why.
 inert lists every changed line under src since the base commit that is not a comment or blank,
 folding a deleted `export` declaration into one `deleted export <name>` line, then a count.
 baseline prints the jest and tsc gate lines of an evidence file whose Commit is the last code
@@ -582,16 +583,19 @@ def cmd_carry(a):
     elif not green or not comments_only(green[1], ':!tests/validation'):
         print(f'validate: no green regression run at {commit}')
     else:
-        print(f'carry {n}' + (', only // comment lines changed since' if code else ''))
+        print(f'carry {n}' + (', only comment lines changed since' if code else ''))
 
 
-LINE_COMMENT = re.compile(r'^\s*(//(?!.*(@ts-|eslint|prettier|istanbul|jest-))|$)')
+# A whole line that is one comment: `// …`, or a `/* … */` or JSX `{/* … */}` that opens and
+# closes on it. A directive is code, and so is a block comment that spans lines.
+LINE_COMMENT = re.compile(r'^\s*((?!.*(@ts-|eslint|prettier|istanbul|jest-))'
+                          r'(//|/\*((?!\*/).)*\*/\s*$|\{/\*((?!\*/).)*\*/\}\s*$)|$)')
 NOT_LINES = ('Binary files', 'rename ', 'old mode', 'new file', 'deleted file')
 
 
 def comments_only(since, *exclude):
-    """True when nothing outside docs changed since <since> but whole `//` comment lines."""
-    # shortcut: a `//` line inside a template literal or JSX text counts as a comment; parse the file if that ever bites.
+    """True when nothing outside docs changed since <since> but whole comment lines."""
+    # shortcut: a comment-shaped line inside a template literal or JSX text counts as a comment; parse the file if that ever bites.
     lines = git('diff', '-U0', since, 'HEAD', '--', '.', *NOT_CODE, *exclude).splitlines()
     return not any(l.startswith(NOT_LINES) or (l[:1] in ('+', '-') and not l.startswith(('+++ ', '--- '))
                                                and not LINE_COMMENT.match(l[1:])) for l in lines)

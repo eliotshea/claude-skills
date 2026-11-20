@@ -550,7 +550,20 @@ def test_carry_ignores_comment_lines_but_not_code_or_directives(repo):
     validation(repo, 1)
     write(repo, 'src/a.ts', '// a clearer note\n\nexport const a = 1;\n')
     loop(repo, 'commit', 'docs: nit', 'src/a.ts')
-    assert loop(repo, 'carry', CODE).stdout == 'carry 1, only // comment lines changed since\n'
+    assert loop(repo, 'carry', CODE).stdout == 'carry 1, only comment lines changed since\n'
+    # A JSX or block comment that opens and closes on its line is a comment too.
+    write(repo, 'src/b.tsx', '<a>\n  {/* old */}\n  /* old */\n</a>\n')
+    loop(repo, 'commit', 'feat: b', 'src/b.tsx')
+    evidence(repo, 2, '- regression: 116 passed of 116')
+    validation(repo, 2)
+    write(repo, 'src/b.tsx', '<a>\n  {/* names both sizes (md: embed, lg: legacy) */}\n  /* new */\n</a>\n')
+    loop(repo, 'commit', 'docs: jsx nit', 'src/b.tsx')
+    assert loop(repo, 'carry', CODE).stdout == 'carry 2, only comment lines changed since\n'
+    for code in ('  {/* a */} <b />\n', '  /* a */ f(); /* b */\n', '  /* eslint-disable */\n', '  /* opens\n'):
+        write(repo, 'src/b.tsx', '<a>\n' + code + '</a>\n')
+        assert not loop(repo, 'commit', 'x', 'src/b.tsx').returncode
+        assert loop(repo, 'carry', CODE).stdout.startswith('validate: code changed'), code
+        git(repo, 'reset', '-q', '--hard', 'HEAD^')
     write(repo, 'src/a.ts', '// a clearer note\n\n// @ts-expect-error\nexport const a = 1;\n')
     loop(repo, 'commit', 'chore: directive', 'src/a.ts')
     assert loop(repo, 'carry', CODE).stdout.startswith('validate: code changed')

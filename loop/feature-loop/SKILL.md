@@ -196,7 +196,8 @@ Every validation runs the whole contract, so any that passes can open the pull r
 code ran the regression suite green: another round would check the same commit again and
 find what n found. Log a `validation carried` row (Result `validation <n> carried`), and route
 as on a PASS. `validate: <why>` means run it. A fix or a refactor gets
-`validate` unless all it changed was whole `//` comment lines.
+`validate` unless all it changed was whole comment lines: `// …`, or a `/* … */` or JSX
+`{/* … */}` that opens and closes on its line.
 
 **Tooling findings.** A finding labelled `tooling` (`### V3-1 · tooling`) is about the
 validator's own scripts or the loop's tools, such as a mask that moves or a base worktree
@@ -543,7 +544,7 @@ header, using Edit on those lines.
 | "The evidence file says it failed, that's a finding" | The reporter decides that. The runner's evidence is what happened, not what it means. |
 | "It's a one-line fix, I'll make it myself" | Dispatch a fix. Your edit skips the test, and the next validator would judge a commit no agent accounted for. |
 | "I'll read the validation file to understand the failure" | The implementer reads it. You route on the header. |
-| "The fix was tiny, and the last validation passed" | Run `loop.py carry`. It carries a fix that only rewrote `//` comments. Any other gets a validation: the pull request claims what that validation saw. |
+| "The fix was tiny, and the last validation passed" | Run `loop.py carry`. It carries a fix that only rewrote comments. Any other gets a validation: the pull request claims what that validation saw. |
 | "Round 1 blocked, so the reviews should wait for its fix" | They are already running on the same commit. One fix answers all three files. |
 | "Every finding is about the validator's own script; the implementer can decline them" | Route on the `tooling` label: the next runner repairs its scripts. A decline only buys another round to rule on it. |
 | "Architecture round 2 raised a good new point" | Round 2 rules only on round 1's requests. New points are notes for the human. |
