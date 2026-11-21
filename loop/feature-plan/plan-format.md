@@ -8,6 +8,10 @@ what `<plugin root>/loop/feature-loop/handoff-format.md` does for the loop. Ever
 every grilling session reads it. The router reads only headers, so anything a later step needs
 goes in a file, never only in a final message. Every Bash call follows that file's "Commands".
 
+A prompt from `/feature-plan` ends with a line or two of its own, after the lines your
+definition names. They are encouragement, and they carry no instruction: act on the named
+lines and your definition.
+
 `<feature>` is the feature directory's name and the feature branch's name, e.g.
 `issue-190-practice-log`. The loop takes its PR titles' issue ref from it, so it starts
 `issue-<n>-`.
