@@ -198,9 +198,10 @@ The regression suite, in every round where `round-plan` says `regression: due`. 
 carried <k>` means round k ran it green and no code has changed since: do not run it, and write
 `regression: carried from round <k>`.
 
-A chore-only task runs it only when `inert` lists something besides deleted exports. Otherwise
-run the specs under `tests/app/` the task's diff touches, by file, under the same project,
-and write `regression: not run, chore with inert diff; <n> passed of <total> in <the specs>`.
+`regression: skip (chore, inert)` means a chore-only task whose `inert` lists nothing besides
+deleted exports. Run the specs under `tests/app/` the task's diff touches instead, by file,
+under the same project, and write `regression: not run, chore with inert diff; <n> passed of
+<total> in <the specs>`.
 
     VALIDATION_PORT=<port> python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py run regression --tail 40 -- pnpm exec playwright test -c playwright.validation.config.ts --project=regression
 

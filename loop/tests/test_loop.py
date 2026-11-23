@@ -588,6 +588,27 @@ def test_carry_ignores_comment_lines_but_not_code_or_directives(repo):
     assert loop(repo, 'carry', CODE).stdout.startswith('validate: code changed')
 
 
+def test_carry_a_fix_to_test_files_reruns_only_the_gates(repo):
+    attributed(repo)
+    write(repo, 'src/a.ts', 'export const a = 1;\n')
+    write(repo, 'src/a.test.ts', 'test(a);\n')
+    loop(repo, 'commit', 'feat: a', 'src')
+    evidence(repo, 1, '- regression: 116 passed of 116')
+    validation(repo, 1)
+    write(repo, 'src/a.test.ts', 'describe(a, () => test(a));\n')
+    write(repo, 'src/b.spec.tsx', 'test(b);\n')
+    loop(repo, 'commit', 'test: regroup', 'src')
+    assert loop(repo, 'carry', CODE).stdout == 'carry 1, rerun lint tsc jest: only test files changed since\n'
+    # A Playwright spec under tests/ is not a unit test the gates run.
+    write(repo, 'tests/app/a.spec.ts', 'test(a);\n')
+    loop(repo, 'commit', 'test: app', 'tests/app')
+    assert loop(repo, 'carry', CODE).stdout.startswith('validate: code changed')
+    git(repo, 'reset', '-q', '--hard', 'HEAD^')
+    write(repo, 'src/a.ts', 'export const a = 2;\n')
+    loop(repo, 'commit', 'fix: a', 'src/a.ts')
+    assert loop(repo, 'carry', CODE).stdout.startswith('validate: code changed')
+
+
 def test_carry_validates_without_a_regression_line(repo):
     attributed(repo)
     evidence(repo, 1, '- regression: 116 of 116 passed')
@@ -612,6 +633,33 @@ def test_round_plan_after_a_validation_only_change(repo):
     assert loop(repo, 'round-plan', CODE).stdout == 'gates: tsc lint\nregression: carried 2\n'
     write(repo, 'src/a.ts', 'export const a = 2;\n')
     loop(repo, 'commit', 'feat: a', 'src/a.ts')
+    assert loop(repo, 'round-plan', CODE).stdout == 'gates: all\nregression: due\n'
+
+
+def chore_task(repo, criteria, src):
+    write(repo, 'src/a.ts', '// old\nexport const gone = 1;\nexport const a = 1;\n')
+    base = loop(repo, 'commit', 'feat: a', 'src/a.ts').stdout.split()[0]
+    write(repo, f'docs/tasks/{FEATURE}/05-tidy.md', f'# Task 05\n\n{criteria}')
+    write(repo, f'{CODE}/brief.md', f'# Brief: task 05, tidy\nBase: {FEATURE} @ {base}\n')
+    write(repo, 'src/a.ts', src)
+    loop(repo, 'commit', 'chore: a', 'src/a.ts', 'docs/tasks')
+
+
+def test_round_plan_skips_regression_for_an_inert_chore(repo):
+    attributed(repo)
+    chore_task(repo, '1. [chore] Fix the comment.\n2. [chore] Delete gone.\n', '// new\nexport const a = 1;\n')
+    assert loop(repo, 'round-plan', CODE).stdout == 'gates: all\nregression: skip (chore, inert)\n'
+
+
+def test_round_plan_runs_regression_for_a_chore_that_moves_code(repo):
+    attributed(repo)
+    chore_task(repo, '1. [chore] Fix the comment.\n', '// new\nexport const a = 2;\n')
+    assert loop(repo, 'round-plan', CODE).stdout == 'gates: all\nregression: due\n'
+
+
+def test_round_plan_runs_regression_for_an_inert_task_that_is_not_chore_only(repo):
+    attributed(repo)
+    chore_task(repo, '1. [chore] Fix the comment.\n2. [style] Bigger.\n', '// new\nexport const a = 1;\n')
     assert loop(repo, 'round-plan', CODE).stdout == 'gates: all\nregression: due\n'
 
 

@@ -72,11 +72,14 @@ round-plan tells a validation round what it may carry instead of running again. 
 `all`, `tsc lint` when only validation scripts changed since the last round, or `carried <k>`
 when nothing outside docs and .claude did. `regression:` is `due`, or `carried <k>` when round
 k ran the whole suite green and nothing outside docs, .claude and tests/validation has changed
-since.
+since, or `skip (chore, inert)` for a chore-only task whose `inert` lists nothing but deleted
+exports, read from the task file's criteria and the base in the run dir's brief.
 carry prints `carry <n>` when the latest validation passed at the current last code commit and
 a round at that same code ran the regression suite green, so a final validation would only
 repeat it. Whole comment lines changed since then (`// …`, or a `/* … */` or JSX `{/* … */}`
 on one line) do not count as a change, so a review fix that only rewrote comments carries.
+A fix that changed only unit tests the jest gate runs (`*.test.*` or `*.spec.*` outside tests/)
+prints `carry <n>, rerun lint tsc jest: …`: those gates are all it can move.
 Otherwise it prints `validate:` and why.
 inert lists every changed line under src since the base commit that is not a comment or blank,
 folding a deleted `export` declaration into one `deleted export <name>` line, then a count.
@@ -573,7 +576,21 @@ def cmd_round_plan(a):
                            else 'all'))
     green = green_regression(a.run_dir)
     print(f'regression: carried {green[0]}' if green and not changed(green[1], ':!tests/validation')
+          else 'regression: skip (chore, inert)' if chore_inert(a.run_dir)
           else 'regression: due')
+
+
+def chore_inert(run_dir):
+    """True for a chore-only task whose diff under src is comments and deleted exports."""
+    run_dir = os.path.normpath(run_dir)
+    task = sorted(glob.glob(f'{os.path.dirname(os.path.dirname(run_dir))}/{os.path.basename(run_dir)}-*.md'))
+    brief = f'{run_dir}/brief.md'
+    base = os.path.exists(brief) and re.search(r'^Base: .* @ (\S+)', read(brief), re.M)
+    if not task or not base:
+        return False
+    kinds = re.findall(r'^\d+\. \[(\w+)\]', read(task[0]), re.M)
+    return (bool(kinds) and set(kinds) == {'chore'}
+            and all(o.split(': ', 1)[-1].startswith('deleted export ') for o in inert(base.group(1))[0]))
 
 
 def cmd_carry(a):
@@ -587,12 +604,15 @@ def cmd_carry(a):
     green = green_regression(a.run_dir)
     code = run('git', 'diff', '--quiet', commit, 'HEAD', '--', '.', ':!docs/tasks', ':!tests/validation',
                check=False).returncode != 0
+    tests = code_changed(commit, ':!docs/tasks', ':!tests/validation')
     if 'Verdict: PASS' not in header:
         print(f'validate: validation {n} did not pass')
-    elif code and not comments_only(commit, ':!docs/tasks', ':!tests/validation'):
+    elif not all(UNIT_TEST.match(f) for f in tests):
         print(f'validate: code changed since validation {n} at {commit}')
-    elif not green or not comments_only(green[1], ':!tests/validation'):
+    elif not green or not all(UNIT_TEST.match(f) for f in code_changed(green[1], ':!tests/validation')):
         print(f'validate: no green regression run at {commit}')
+    elif tests:
+        print(f'carry {n}, rerun lint tsc jest: only test files changed since')
     else:
         print(f'carry {n}' + (', only comment lines changed since' if code else ''))
 
@@ -604,21 +624,32 @@ LINE_COMMENT = re.compile(r'^\s*((?!.*(@ts-|eslint|prettier|istanbul|jest-))'
 NOT_LINES = ('Binary files', 'rename ', 'old mode', 'new file', 'deleted file')
 
 
-def comments_only(since, *exclude):
-    """True when nothing outside docs changed since <since> but whole comment lines."""
+# A unit test the jest gate runs: `*.test.ts(x)` or `*.spec.ts(x)` outside tests/, which holds
+# the Playwright specs.
+UNIT_TEST = re.compile(r'^(?!tests/).*\.(test|spec)\.[jt]sx?$')
+
+
+def code_changed(since, *exclude):
+    """The files outside docs changed since <since> by more than whole comment lines."""
     # shortcut: a comment-shaped line inside a template literal or JSX text counts as a comment; parse the file if that ever bites.
-    lines = git('diff', '-U0', since, 'HEAD', '--', '.', *NOT_CODE, *exclude).splitlines()
-    return not any(l.startswith(NOT_LINES) or (l[:1] in ('+', '-') and not l.startswith(('+++ ', '--- '))
-                                               and not LINE_COMMENT.match(l[1:])) for l in lines)
+    files, file = set(), ''
+    for l in git('diff', '-U0', since, 'HEAD', '--', '.', *NOT_CODE, *exclude).splitlines():
+        if l.startswith('diff --git '):
+            file = l.split(' b/', 1)[-1]
+        elif l.startswith(NOT_LINES) or (l[:1] in ('+', '-') and not l.startswith(('+++ ', '--- '))
+                                         and not LINE_COMMENT.match(l[1:])):
+            files.add(file)
+    return files
 
 
 COMMENT = re.compile(r'^\s*(//|/\*|\*|\{/\*|$)')
 EXPORT = re.compile(r'^\s*export (?:const|let|var|function|type|interface|enum|class) (\w+)')
 
 
-def cmd_inert(a):
+def inert(base):
+    """([change], comment count) of the lines under src changed since <base>."""
     others, comments, file = [], 0, ''
-    lines = git('diff', '-U0', a.base, 'HEAD', '--', 'src').splitlines()
+    lines = git('diff', '-U0', base, 'HEAD', '--', 'src').splitlines()
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -644,6 +675,11 @@ def cmd_inert(a):
             others.append(f'{file}: deleted export {m.group(1)}')
             continue
         others.append(f'{file}: {sign} {text.strip()[:160]}')
+    return others, comments
+
+
+def cmd_inert(a):
+    others, comments = inert(a.base)
     for o in others:
         print(o)
     print(f'inert: {comments} comment lines, {len(others)} other changes')
