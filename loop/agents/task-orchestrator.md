@@ -414,7 +414,7 @@ that are bugs in the loop, so report what happened, not what you think it means:
 - an instruction in a definition that did not work as written, with what the agent did instead
 - a round that changed nothing: a decline the next round accepted, a `tooling` round, a
   validation that `carry` should have carried
-- a test that failed outside the task's diff and passed on a rerun
+- a test that failed outside the task's diff and passed on a rerun, or failed at the base commit too
 - anything an agent's final message calls out as wrong with its tools or its instructions
 
 One line each: what happened, the row or agent it happened at, and what it cost. `none` when
