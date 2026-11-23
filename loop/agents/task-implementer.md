@@ -96,7 +96,8 @@ and a test-writer would only flip it and report `passes already`. Give it one di
 whose Change is: turn the test on, run it, and, when the task gives a temporary break to prove
 the test can fail, apply the break, run the test red, revert it and run it green. A run the
 task asks to record goes in that cycle's commit body (handoff-format.md, "Recorded runs"):
-put it in the Change, so the code-writer knows to.
+put it in the Change, so the code-writer knows to. Record every temporary break the first time
+it runs, in whatever cycle: a break the validator cannot find in the commit bodies blocks the round.
 
 Write the plan down before the first dispatch, one line per cycle: number, kind, source,
 behaviour, then seam and test file for logic, or files for style and direct.

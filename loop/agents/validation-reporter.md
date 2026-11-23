@@ -75,6 +75,9 @@ still cannot tell after a rerun, that item is `unverified` and it gets a finding
    When the app might be at fault too, it is not tooling.
 7. **Carried gates.** A gate the runner wrote as `carried from round <k>` stands on round k's
    result, which the previous validation file records: no finding for not running it.
+8. **Recorded runs.** A finding about a run the task asked to record, such as a temporary
+   break, gets the unfiltered Repro `git log --format=%B <base commit>..HEAD`. A path filter
+   leaves out the empty commits handoff-format.md records such runs in.
 
 ## Views
 
@@ -160,7 +163,8 @@ The header from handoff-format.md. Then:
 
     ## For the PR
     At most fifteen lines: criteria satisfied out of total, the script file for this task, and
-    a `- [ ]` checklist of every manual item with the exact steps a human should take.
+    a `- [ ]` checklist of every manual item with the exact steps a human should take. Carry
+    no earlier item whose finding is now accepted, fixed or ruled on.
 
 Commit your file and nothing else:
 `python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py commit 'docs(validation): task <NN> round <round>' <run dir>/validation-<round>.md`.
