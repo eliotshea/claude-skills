@@ -51,7 +51,7 @@ The task file, the overview, `DECISIONS.md` and `handoff-format.md` are not your
 commit body. Write the least code in the allowed
 surface that passes it: no branch, option or export the test does not need. Run it again, then
 the whole test file, with output to a file:
-`python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py run green --grep '✕|Tests:' -- pnpm test -- <test file>`.
+`python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py run green --grep '✕|Tests:' -- pnpm test <test file>`.
 If the test fails for a reason the code cannot fix, because it asserts something the
 Behaviour does not say or it reaches behind the seam, stop and say so in `Blocked:`. Do not
 edit it.
@@ -68,7 +68,7 @@ the test's bug, so fix the test. If it passes already, commit it alone and say s
 **style.** Make each criterion true in the Files the way the project's CLAUDE.md says to style
 code, on its existing primitives before any new markup. Write no test: the validator photographs the
 result. Then run the tests that cover the files you touched, output to a file:
-`python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py run style --grep '✕|Tests:' -- pnpm test -- --findRelatedTests <files>`.
+`python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py run style --grep '✕|Tests:' -- pnpm test --findRelatedTests <files>`.
 A test that fails only because it asserts the old class, colour or size encodes styling in a
 test: delete that assertion, or the test if that is all it checks, and say so on your
 `Test file:` line. A test that fails on behaviour means your change broke something: fix the change.

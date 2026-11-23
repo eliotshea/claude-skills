@@ -45,7 +45,7 @@ The task file, the overview, `DECISIONS.md` and `handoff-format.md` are not your
    nothing behind it. The expected value comes from the Behaviour or a worked example, never
    from recomputing what the code does.
 2. Run only that test, with output to a file:
-   `python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py run red --grep '✕|●|Expected|Received|Tests:' --tail 20 -- pnpm test -- <test file> -t '<name>'`.
+   `python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py run red --grep '✕|●|Expected|Received|Tests:' --tail 20 -- pnpm test <test file> -t '<name>'`.
    A Playwright spec under `tests/app/` runs with
    `python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py run red --tail 20 -- pnpm exec playwright test <file> -g '<name>' --reporter=line`.
 3. It must fail on an assertion, for the reason the Behaviour gives. A test that fails on an
