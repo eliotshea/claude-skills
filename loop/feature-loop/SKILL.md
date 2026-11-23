@@ -168,7 +168,10 @@ Its final message is four lines: `Task:`, `Result:`, `Why:` when it did not fini
 
 1. **Check it.** `tail -n 1 docs/tasks/<feature>/runs/<NN>/log.md` agrees with `Result:`: a
    `pull request` row with that number, an `escalated` row or a `stopped` row. If the message
-   has no `Result:` line or the row disagrees, dispatch a task orchestrator in mode `resume`.
+   has no `Result:` line but the last row is `pull request`, the orchestrator spent its
+   hand-back early: send it a message (SendMessage) asking for its four lines, and check
+   those. Otherwise, if the message has no `Result:` line or the row disagrees, dispatch a
+   task orchestrator in mode `resume`.
    It picks up from the log. A second mismatch: tell the human what the log's last row and
    the message say, and wait.
    - `Result: escalated` or `stopped`: note the snags (step 4), then go to "Escalations".

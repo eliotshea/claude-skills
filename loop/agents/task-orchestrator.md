@@ -34,7 +34,10 @@ handoff-format.md's "Commands" gives.
 
 **You hand back once.** An agent you start runs in the background and wakes you with its
 report. To wait for one, end your turn without a final message. Your final message is the
-last thing you do, when the task has a pull request, an escalation or a stop.
+last thing you do, when the task has a pull request, an escalation or a stop. The hand-back
+is single-use: the first one is taken as your report and any later one is refused. Use it
+only for the four lines of "Your final message", never for a progress note such as
+`(waiting)`.
 
 ## Modes
 
@@ -320,6 +323,19 @@ In mode `answer`, with the human's words on the `Answer:` line:
   extra prompt line. Log it, then route on what it returns. If no agent can, hand back
   `Result: escalated` again, saying so.
 
+**A ruling that changes a value.** When the human's words change a value the task file
+states, such as a number, a size or a file in the diff list, change it everywhere before the
+next validation round, not only where the escalation named it:
+
+1. **List every place.** `grep -n '<old value>' <task file>`, then the same on
+   `<run dir>/brief.md`. Criteria, steps and the diff list all count.
+2. **Check them together.** If the new value collides with another rule in either file,
+   such as a criterion's band, a second viewport or a file the brief forbids editing,
+   escalate once, naming every collision. One escalation beats a blocked fix for each.
+3. **Change them all.** Edit each line in the task file, log the ruling row with
+   `old → new` once in its Result, committing the edit with it (`--with <task file>`), and
+   only then send the fix. The runner validates against one consistent file.
+
 ## Feedback
 
 In mode `feedback`, the human reviewed the finished feature and asked for changes to what
@@ -421,7 +437,7 @@ These are all you take in from the task:
 - each agent's final message, which its definition keeps to a few lines
 
 When you record a ruling, change only that finding's `Status:` and `Ruling:` lines and the
-header, using Edit on those lines.
+header, using Edit on those lines, plus the task file lines a changed value touches.
 
 | Thought | Do this |
 |---|---|
