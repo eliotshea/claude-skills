@@ -95,6 +95,9 @@ not a read: the code lands in the file, not in your window.
 6. The PR title's issue ref is the feature directory's own `issue-<n>`. Take its type and
    scope from how this repository writes them: `git log --oneline -8`. The orchestrator passes
    this line to `gh pr create` unread, so a ref you guess ships on the pull request.
+7. A rule or trap that keeps an agent off a lint command because it fixes files, such as
+   `pnpm lint` when it is `next lint --fix`, names the command the gates run instead:
+   `pnpm exec next lint`. Every agent then runs the same check.
 
 ## brief.md
 
