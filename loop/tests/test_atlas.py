@@ -327,6 +327,26 @@ def test_merge_validates_against_the_base_not_the_working_tree(repo):
     assert 'a.ts: `:40` is outside its 3 lines' in result.stderr
 
 
+def test_merge_refuses_ranges_from_before_the_file_shifted(repo):
+    # Issue 22: ranges read from an older copy of the file (a lagging documentSymbol) were
+    # stamped with the new object, so the entry showed fresh with every anchor 2 lines early.
+    old = 'const a = 1\nconst handleGrab = () => {}\nconst fling = () => {}\n'
+    repo.commit({'t.ts': old})
+    base = repo.commit({'t.ts': '// one\n// two\n' + old})
+    (repo.path / 'docs/tasks').mkdir(parents=True)
+    stale = entries_file(repo, '### t.ts\n- `:2` `handleGrab`; `fling` `:3`\n')
+    result = run(repo, 'merge', base, stale, '--task', 'f/01')
+    assert result.returncode == 1
+    assert result.stderr.splitlines()[1:] == [
+        't.ts: `:2` is not where `handleGrab` is, `:4` is',
+        't.ts: `:3` is not where `fling` is, `:5` is',
+    ]
+    held = entries_file(repo, '### t.ts\n- `:4` `handleGrab`; `fling` `:5`; `:1-2` comments\n',
+                        'held.md')
+    assert run(repo, 'merge', base, held, '--task', 'f/01').returncode == 0
+    assert run(repo, 'list', base).stdout == 'fresh  t.ts\n'
+
+
 def test_merge_round_trips_through_save_and_load(repo, atlas):
     base = repo.commit({'a.ts': 'a\n'})
     (repo.path / 'docs/tasks').mkdir(parents=True)

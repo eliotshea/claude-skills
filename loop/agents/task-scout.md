@@ -77,7 +77,9 @@ ones you give it:
   describe well enough to quote or anchor from, and then only that range.
 - **stale**: the file changed since. The hunk headers under it show where. The entry is a map of
   where things were: re-read the regions the hunks touch, get the new ranges from
-  `documentSymbol`, and write the entry again.
+  `documentSymbol`, and write the entry again. The language server can lag the checkout and
+  hand back the old file's lines, so check each range you carry over against the file at the
+  base commit (`git show <base commit>:<path> | grep -n <name>`) before you merge.
 - **no entry**: survey the file as if there were no atlas, and write its entry.
 
 A directory entry, a path ending in `/`, is fresh while no file under it has changed. Its stale
@@ -108,7 +110,10 @@ Then
     python3 ${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/atlas.py merge <base commit> <that file> --task <feature>/<NN>
 
 stamps them with their objects at the base commit and adds or replaces them. It lists every bad
-range or marker and writes nothing; fix them and run it again.
+range or marker and writes nothing; fix them and run it again. A range written beside a code
+span, as `` `:825` `measureSurface` `` or `` `applyDrag` `:843` ``, is bad when the span's
+words are not in it but sit a few lines off: an entry stamped fresh with shifted ranges would
+mislead every later scout. The message names the line they are on.
 
 ## Anchors
 

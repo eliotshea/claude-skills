@@ -21,7 +21,8 @@ says so.
 merge takes a file of entries headed `### <path>`, stamps each with its object at the base
 commit, and adds or replaces them in the atlas. Every problem is listed at once and the atlas
 is left unchanged: a path missing at the base commit, a `:<line>` range past the end of its
-file, a quote marker that fill-quotes.py would refuse, or an entry over MAX_LINES lines.
+file, a range beside a code span whose words sit up to MAX_DRIFT lines outside it, a quote
+marker that fill-quotes.py would refuse, or an entry over MAX_LINES lines.
 prune removes entries without anyone reading the atlas. With no paths it removes every entry
 whose path is gone at the base commit, which covers deleted and renamed files and
 directories; --stale removes stale entries too. With paths it removes those entries, and for
@@ -34,8 +35,11 @@ import sys
 MAX_LINES = 40
 MAX_HUNKS = 12
 MAX_QUOTE = 15
+MAX_DRIFT = 20
 HEADING = re.compile(r'^### (\S+?)(?: @ (\S+))?\s*$')
 RANGE = re.compile(r'`:(\d+)(?:-(\d+))?`')
+SPAN = re.compile(r'`([^`]+)`')
+WORD = re.compile(r'[\w$-]+')
 MARKER = re.compile(r'^\s*<<quote (\S+?):(\d+)(?:-(\d+))?>>\s*$')
 ATLAS = 'docs/tasks/atlas.md'
 PREAMBLE = """# Atlas
@@ -152,7 +156,8 @@ def cmd_show(base, paths):
 def check(base, path, body, problems):
     if len(body) > MAX_LINES:
         problems.append(f'{path}: {len(body)} lines, over {MAX_LINES}. Keep the index, drop the prose.')
-    lines = None if path.endswith('/') else line_count(base, path)
+    content = None if path.endswith('/') else git('show', f'{base}:{path}')
+    lines = None if content is None else content.splitlines()
     for text in body:
         marker = MARKER.match(text)
         if marker:
@@ -170,9 +175,34 @@ def check(base, path, body, problems):
             continue
         for start, end in RANGE.findall(text):
             start, end = int(start), int(end or start)
-            if start < 1 or end < start or end > lines:
+            if start < 1 or end < start or end > len(lines):
                 problems.append(f'{path}: `:{start}{"-" + str(end) if end != start else ""}` '
-                                f'is outside its {lines} lines')
+                                f'is outside its {len(lines)} lines')
+        misplaced(path, text, lines, problems)
+
+
+def misplaced(path, text, lines, problems):
+    """A range next to a code span that holds none of its words, which sit a few lines off."""
+    spans = list(SPAN.finditer(text))
+    for i, span in enumerate(spans):
+        cited = RANGE.fullmatch(span.group(0))
+        if not cited:
+            continue
+        start = int(cited.group(1))
+        end = int(cited.group(2) or start)
+        if start < 1 or end < start or end > len(lines):
+            continue
+        for near in spans[max(i - 1, 0):i] + spans[i + 1:i + 2]:
+            if RANGE.fullmatch(near.group(0)) or text[min(near.end(), span.end()):
+                                                       max(near.start(), span.start())].strip():
+                continue
+            words = WORD.findall(near.group(1))
+            holds = [n for n in range(max(start - MAX_DRIFT, 1), min(end + MAX_DRIFT, len(lines)) + 1)
+                     if any(w in lines[n - 1] for w in words)]
+            if holds and not any(start <= n <= end for n in holds):
+                at = min(holds, key=lambda n: abs(n - start))
+                problems.append(f'{path}: `{span.group(1)}` is not where `{near.group(1)}` is, '
+                                f'`:{at}` is')
 
 
 def cmd_merge(base, entries_file, task):
