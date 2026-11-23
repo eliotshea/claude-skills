@@ -75,6 +75,18 @@ still cannot tell after a rerun, that item is `unverified` and it gets a finding
    When the app might be at fault too, it is not tooling.
 7. **Carried gates.** A gate the runner wrote as `carried from round <k>` stands on round k's
    result, which the previous validation file records: no finding for not running it.
+8. **Failures outside the diff.** A failing Jest suite or regression spec whose file is not in
+   `git diff --name-only <base commit>..HEAD` is judged by its `outside diff` line under Notes,
+   not by its first run.
+   - Passed alone or in the suite rerun: a flake, not a finding. Say so under Observations
+     and add `- Known flake: <file>, passed on rerun` under `## For the PR`.
+   - Failed every rerun and failed at base: not this task's, and not a finding. Say so under
+     Observations and add `- Fails at base too: <file>` under `## For the PR`. A regression
+     line short only by such specs still shows the suite ran.
+   - Failed every rerun and passed at base: a finding, like any failing gate.
+   - No `outside diff` line, or a base run `blocked` or `not run` after two failures: a
+     `tooling` finding whose Expected is the reruns and the base run, so the next runner does
+     them and no implementer is asked to decline it.
 
 ## Views
 

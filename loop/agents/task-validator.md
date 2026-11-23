@@ -208,6 +208,18 @@ It prints a `- regression: <n> passed of <total>` line before the exit code. Pas
 from the whole-suite run into the evidence verbatim. Rerun a failing regression spec once, and
 record both runs. A spec that passes the second time is flaky, and you say so.
 
+A failure outside the task's diff gets more before you record it. When a Jest suite not in
+the Baseline or a regression spec fails and its file is not in
+`git diff --name-only <base commit>..HEAD`, rerun it alone, then rerun the whole suite once
+with the same `run` command, whatever the first rerun did. If it failed both times, run it at
+the base commit, which takes Jest tests and `tests/app/` specs as well as your own:
+
+    python3 ${CLAUDE_PLUGIN_ROOT}/loop/feature-loop/base_run.py <base commit> <test file> <port>
+
+Write one line under Notes for each such file, with its log paths:
+`outside diff · <file> · alone: <passed|failed> · suite: <passed|failed> · base: <passed|failed|blocked|not run>`.
+Its jest and regression lines in Gates come from the whole-suite rerun.
+
 Keep every log file. Name its path in the evidence so the reporter can read a tail of it.
 
 ## evidence-<round>.md
