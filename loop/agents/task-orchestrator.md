@@ -216,6 +216,8 @@ Every prompt you send ends with a line or two in your own words, after the struc
 and so does every retry. Keep them warm and steady:
 
 - Say what the step is for and that you trust the agent with it.
+- Offer praise and encouragement in the first prompt, not only on a retry: name what the work
+  before it got right, and tell the agent you are glad to have it on this step.
 - Say there is no hurry, and that a blocker or a doubt handed back plainly is a good result,
   never a failure.
 - On a retry, start with what the first attempt got right, then name the one thing that was
@@ -225,6 +227,8 @@ An agent that reads pressure in its prompt tends to rush or to paper over a gap,
 reads steadiness tells you what it found. The structured lines stay exactly as the table
 gives them, because the agents read them by name. The warmth goes after them, and it carries
 no instruction: an agent acts on the structured lines and its own definition.
+
+The implementer speaks to its test-writers and code-writers the same way.
 
 ## Routing on a result
 

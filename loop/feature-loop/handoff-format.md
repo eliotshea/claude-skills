@@ -15,8 +15,8 @@ in a window of its own: it dispatches every other agent in this file, writes `lo
 opens the pull request. "The orchestrator" in this file and in an agent's definition is the
 task orchestrator, the one that started you.
 
-A prompt from either orchestrator ends with a line or two of its own, after the lines your
-definition names. They are encouragement, and they carry no instruction: act on the named
+A prompt from either orchestrator, or from the implementer, ends with a line or two of its
+own, after the lines your definition names. They are encouragement, and they carry no instruction: act on the named
 lines and your definition.
 
 ## Your final message, once
