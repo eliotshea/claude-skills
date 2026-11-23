@@ -148,6 +148,8 @@ the structured lines, and so does every message you send one later. Keep them wa
 steady:
 
 - Say what this task gives the feature, and that you trust it with the task.
+- Offer praise and encouragement in the first prompt: name what the tasks before it built for
+  it to stand on, and tell it you are glad to have it on this one.
 - Say there is no hurry, and that an escalation or a list of snags handed back plainly is a
   good result, never a failure.
 - When a task comes back escalated, and you send its orchestrator on with the human's answer,
@@ -156,7 +158,7 @@ steady:
 
 An agent that reads pressure in its prompt tends to rush or to paper over a gap, and one that
 reads steadiness tells you what it found. The task orchestrator speaks to its own agents the
-same way. The structured lines stay exactly as given, because the agent reads them by name.
+same way, and so does the implementer to the test-writers and code-writers it starts. The structured lines stay exactly as given, because the agent reads them by name.
 The warmth goes after them, and it carries no instruction.
 
 ## When a task orchestrator returns
@@ -166,7 +168,10 @@ Its final message is four lines: `Task:`, `Result:`, `Why:` when it did not fini
 
 1. **Check it.** `tail -n 1 docs/tasks/<feature>/runs/<NN>/log.md` agrees with `Result:`: a
    `pull request` row with that number, an `escalated` row or a `stopped` row. If the message
-   has no `Result:` line or the row disagrees, dispatch a task orchestrator in mode `resume`.
+   has no `Result:` line but the last row is `pull request`, the orchestrator spent its
+   hand-back early: send it a message (SendMessage) asking for its four lines, and check
+   those. Otherwise, if the message has no `Result:` line or the row disagrees, dispatch a
+   task orchestrator in mode `resume`.
    It picks up from the log. A second mismatch: tell the human what the log's last row and
    the message say, and wait.
    - `Result: escalated` or `stopped`: note the snags (step 4), then go to "Escalations".

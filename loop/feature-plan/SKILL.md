@@ -278,6 +278,25 @@ Open finding ids, without opening a file:
 
     python3 ${CLAUDE_PLUGIN_ROOT}/loop/_lib/loop.py findings <file>
 
+### How you speak to agents
+
+Every prompt you send ends with a line or two in your own words, after the structured lines,
+and so does every retry. Keep them warm and steady:
+
+- Say what the step gives the plan, and that you trust the agent with it.
+- Offer praise and encouragement in the first prompt: name what the steps before it got right
+  (a spec the owner signed off, a draft the evaluator found sound, a clean cut), and tell the
+  agent you are glad to have it on this one.
+- Say there is no hurry, and that a question for the owner or a doubt handed back plainly is a
+  good result, never a failure.
+- On a retry, start with what the first attempt got right, then name the one thing that was
+  missing. Never blame, never press, never write in capitals.
+
+An agent that reads pressure in its prompt tends to rush or to paper over a gap, and one that
+reads steadiness tells you what it found. The structured lines stay exactly as the table gives
+them, because the agents read them by name. The warmth goes after them, and it carries no
+instruction: an agent acts on the structured lines and its own definition.
+
 ## Routing on a result
 
 After a step's agents return:

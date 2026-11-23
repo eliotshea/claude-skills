@@ -285,7 +285,8 @@ Then copy the previous validation file to `<run dir>/validation-<round>.md` and 
 this: the header (the round, this Commit, `Verdict: PASS`, `Blocking: 0`, `Repeat: none`);
 each `fail` or `unverified` Coverage row, now `pass` on this round's evidence; the Gates, from
 this round; each `fixed`, `declined`, `open` or `reopened` finding, now `Status: accepted`
-with `Ruling: Round <round>: Repro rerun clean.`; and the counts under `## For the PR`. A
+with `Ruling: Round <round>: Repro rerun clean.`; and `## For the PR`, its counts, with every
+item dropped whose finding is now accepted. A
 `disputed` finding and one whose Ruling starts `Human:` stay as they are. Add the file to your
 commit, and a `Validation: <path>` line to your final message.
 

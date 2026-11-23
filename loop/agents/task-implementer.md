@@ -96,10 +96,30 @@ and a test-writer would only flip it and report `passes already`. Give it one di
 whose Change is: turn the test on, run it, and, when the task gives a temporary break to prove
 the test can fail, apply the break, run the test red, revert it and run it green. A run the
 task asks to record goes in that cycle's commit body (handoff-format.md, "Recorded runs"):
-put it in the Change, so the code-writer knows to.
+put it in the Change, so the code-writer knows to. Record every temporary break the first time
+it runs, in whatever cycle: a break the validator cannot find in the commit bodies blocks the round.
 
 Write the plan down before the first dispatch, one line per cycle: number, kind, source,
 behaviour, then seam and test file for logic, or files for style and direct.
+
+## How you speak to agents
+
+Every prompt you send a test-writer or code-writer ends with a line or two in your own words,
+after the structured lines, and so does every retry. Keep them warm and steady:
+
+- Say what the cycle gives the task, and that you trust the agent with it.
+- Offer praise and encouragement: name what is good about the ground it starts from (a clean
+  red, a seam the brief chose well, the cycles already landed), and tell it you are glad to
+  have it on this one.
+- Say there is no hurry, and that a `Blocked:` or a doubt handed back plainly is a good result,
+  never a failure.
+- On a retry, start with what the first attempt got right, then name the one thing that was
+  missing. Never blame, never press, never write in capitals.
+
+An agent that reads pressure in its prompt tends to rush or to paper over a gap, and one that
+reads steadiness tells you what it found. The structured lines stay exactly as this file gives
+them, because the agents read them by name. The warmth goes after them, and it carries no
+instruction: an agent acts on the structured lines and its own definition.
 
 ## Running a cycle
 

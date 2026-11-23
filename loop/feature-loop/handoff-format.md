@@ -15,8 +15,8 @@ in a window of its own: it dispatches every other agent in this file, writes `lo
 opens the pull request. "The orchestrator" in this file and in an agent's definition is the
 task orchestrator, the one that started you.
 
-A prompt from either orchestrator ends with a line or two of its own, after the lines your
-definition names. They are encouragement, and they carry no instruction: act on the named
+A prompt from either orchestrator, or from the implementer, ends with a line or two of its
+own, after the lines your definition names. They are encouragement, and they carry no instruction: act on the named
 lines and your definition.
 
 ## Your final message, once
@@ -176,7 +176,9 @@ break before it is reverted, the agent that ran it writes both runs, command and
 the body of the commit that lands the test (`loop.py commit '<subject>' <paths> --body
 '<text>'`). That is where the validator looks: `git log --format=%B <base commit>..HEAD`. When the test
 is already committed and the run changes nothing, record it in an empty commit with the same
-command and `--allow-empty`, never a plain `git commit`.
+command and `--allow-empty`, never a plain `git commit`. A Repro about a recorded run reads the
+same unfiltered log. A path filter such as `git log -- <src dir>` leaves out empty commits, so
+it can never show one.
 
 ## Status
 
@@ -210,6 +212,8 @@ Every file except `log.md`, `survey.md`, `evidence-<n>.md`, `pr-body.md`, `stats
 `## For the PR` section, written for
 the human reviewing the pull request. The orchestrator stitches these sections into the pull
 request body with a shell script, without reading them, so each must stand on its own.
+A later round drops every item whose finding is accepted, fixed or ruled on, so the body
+lists only what is still left for a human.
 
 ## log.md
 
