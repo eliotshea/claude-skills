@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Run a validation spec at the task's base commit.
+"""Run a test file at the task's base commit.
 
-    python3 <plugin root>/loop/feature-loop/base_run.py <base commit> <spec> <port> [-g '<title regex>'] [--tail <n>]
+    python3 <plugin root>/loop/feature-loop/base_run.py <base commit> <test file> <port> [-g '<title regex>'] [--tail <n>]
 
-It builds a throwaway worktree of the base commit, copies in this checkout's spec directory,
-`tests/app/fixtures`, playwright.validation.config.ts and .env (the base may predate any of
-them), gives it its packages, and runs the spec under the `validation` project on <port>+1,
-only the tests whose titles match -g when given. The worktree is removed afterwards, whatever
-happened.
+The test file is a validation spec, a project Playwright spec or a Jest test. It builds a
+throwaway worktree of the base commit and gives it its packages. A validation spec (under
+tests/validation/) runs under the `validation` project, with this checkout's spec directory,
+`tests/app/fixtures`, playwright.validation.config.ts and .env copied in, since the base may
+predate any of them. Any other `.spec.ts` runs under the `regression` project and a
+`.test.ts(x)` runs under Jest, both as the base has them: the config and .env are still
+copied, but the test's own directory is not, so a failure there is the base's own. Playwright
+serves on <port>+1, Jest ignores the port. Only the tests whose titles match -g run when it
+is given. The worktree is removed afterwards, whatever happened.
 
 Packages: when package.json, pnpm-lock.yaml and the Prisma schema are the same at the base as
 here, the worktree links this checkout's node_modules and installs nothing. Otherwise it
@@ -16,7 +20,7 @@ one fails, installs again with --force, then gives up with the error. A fresh in
 come out missing a package before, and the dev server then spent its whole 120-second start
 timeout failing on it.
 
-It prints the last --tail lines of Playwright's output (20 by default), leaving out the dev
+It prints the last --tail lines of the test run's output (20 by default), leaving out the dev
 server's `[WebServer]` lines, then the exit code and the path of the full log. A test that
 logs its readings, `console.log("PICTURE", ...)`, prints them into that tail, so measuring at
 the base is one run of that test with -g.
@@ -39,6 +43,7 @@ DEPS = ['package.json', 'pnpm-lock.yaml', '.npmrc', 'prisma/schema.prisma']
 # Imported before the server starts, those the project lists. @trpc/next is the one a fresh
 # install has lost (its peer react-ssr-prepass), and every page loads it through _app.
 IMPORTS = ['next', '@trpc/next']
+VALIDATION_DIR = 'tests/validation/'
 
 
 def run(cmd, cwd, log, env=None):
@@ -82,14 +87,16 @@ def packages(base, root, tree, logs):
 
 @contextlib.contextmanager
 def worktree(base, spec, logs):
-    """A worktree of <base> with this checkout's files for <spec>, installed. Removed on exit."""
+    """A worktree of <base> with this checkout's files for <spec>, installed. Removed on exit.
+    Only a validation spec brings its directory: any other test runs as the base has it."""
     root = os.getcwd()
     tmp = tempfile.mkdtemp(prefix='base-tree-')
     tree = os.path.join(tmp, 'base')
     subprocess.run(['git', 'worktree', 'add', '--detach', '-q', tree, base], check=True)
     try:
         # The base may predate this spec, the helpers beside it, its fixtures or the config.
-        for path in ['.env', CONFIG, os.path.dirname(spec), 'tests/app/fixtures']:
+        own = [os.path.dirname(spec), 'tests/app/fixtures'] if spec.startswith(VALIDATION_DIR) else []
+        for path in ['.env', CONFIG, *own]:
             src, dst = os.path.join(root, path), os.path.join(tree, path)
             if os.path.isdir(src):
                 shutil.rmtree(dst, ignore_errors=True)
@@ -107,7 +114,7 @@ def worktree(base, spec, logs):
 def main():
     p = argparse.ArgumentParser(prog='base_run.py', description=__doc__.split('\n')[0])
     p.add_argument('base', metavar='<base commit>')
-    p.add_argument('spec', metavar='<spec>')
+    p.add_argument('spec', metavar='<test file>')
     p.add_argument('port', metavar='<port>', type=int)
     p.add_argument('-g', dest='grep', metavar='<title regex>')
     p.add_argument('--tail', type=int, default=20, metavar='<n>')
@@ -115,9 +122,12 @@ def main():
 
     logs = tempfile.mkdtemp(prefix='base-run-')
     log = os.path.join(logs, 'playwright.log')
-    cmd = ['pnpm', 'exec', 'playwright', 'test', '-c', CONFIG, '--project=validation', a.spec]
-    if a.grep:
-        cmd += ['-g', a.grep]
+    if re.search(r'\.test\.[jt]sx?$', a.spec):
+        cmd = ['pnpm', 'exec', 'jest', a.spec] + (['-t', a.grep] if a.grep else [])
+    else:
+        project = 'validation' if a.spec.startswith(VALIDATION_DIR) else 'regression'
+        cmd = ['pnpm', 'exec', 'playwright', 'test', '-c', CONFIG, f'--project={project}', a.spec]
+        cmd += ['-g', a.grep] if a.grep else []
     with worktree(a.base, a.spec, logs) as tree:
         code = run(cmd, tree, log, {'VALIDATION_PORT': str(a.port + 1)})
     with open(log) as f:

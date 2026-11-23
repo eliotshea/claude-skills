@@ -1,5 +1,5 @@
-"""base_run.py: the base worktree shots.py shares, and a validation spec run at the base commit,
-with Playwright faked."""
+"""base_run.py: the base worktree shots.py shares, and a test file run at the base commit, with
+Playwright and Jest faked."""
 import contextlib
 import os
 import sys
@@ -145,6 +145,17 @@ def test_worktree_replaces_a_fixtures_dir_the_base_already_has(repo, monkeypatch
         assert sorted(os.listdir(os.path.join(tree, 'tests/app/fixtures'))) == ['new.ts']
 
 
+def test_worktree_keeps_the_bases_own_copy_of_a_test_outside_the_validation_dir(repo, monkeypatch,
+                                                                                tmp_path):
+    # A project test is run as the base has it, so "fails at base" means the base's code and test.
+    base = repo.commit({'tests/app/embed.spec.ts': 'base\n', 'tests/app/helper.ts': 'base\n'})
+    repo.write('tests/app/helper.ts', 'head\n')
+    monkeypatch.chdir(repo.path)
+    monkeypatch.setattr(base_run, 'run', lambda *a, **k: 0)
+    with base_run.worktree(base, 'tests/app/embed.spec.ts', str(tmp_path)) as tree:
+        assert open(os.path.join(tree, 'tests/app/helper.ts')).read() == 'base\n'
+
+
 def test_worktree_install_failure_exits_and_still_removes_it(project, monkeypatch, tmp_path):
     trees = []
 
@@ -217,6 +228,20 @@ def test_main_runs_the_spec_under_the_validation_project_on_the_next_port(fake, 
                               '--project=validation', SPEC],
                              '/base-tree', fake['log'], {'VALIDATION_PORT': '3101'})]
     assert capsys.readouterr().out.splitlines() == ['one', 'two', f'exit 1, log {fake["log"]}']
+
+
+def test_main_runs_a_project_spec_under_the_regression_project(fake):
+    fake['main']('abc123', 'tests/app/embed-a11y.spec.ts', '3100', '-g', 'focus')
+    assert fake['runs'][0][0] == ['pnpm', 'exec', 'playwright', 'test', '-c', base_run.CONFIG,
+                                  '--project=regression', 'tests/app/embed-a11y.spec.ts',
+                                  '-g', 'focus']
+
+
+def test_main_runs_a_jest_file_with_jest_and_its_title_flag(fake, capsys):
+    test = 'src/components/atomic/dropdown.test.tsx'
+    assert fake['main']('abc123', test, '3100', '-g', 'opens') == 1
+    assert fake['runs'][0][0] == ['pnpm', 'exec', 'jest', test, '-t', 'opens']
+    assert capsys.readouterr().out.splitlines()[-1] == f'exit 1, log {fake["log"]}'
 
 
 def test_main_passes_a_title_regex_to_playwright(fake):
